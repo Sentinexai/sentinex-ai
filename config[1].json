@@ -1,0 +1,4 @@
+{
+  "risk_per_trade": 0.01,
+  "trailing_stop": 0.5
+}

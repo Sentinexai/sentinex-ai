@@ -24,5 +24,5 @@ st.markdown("---")
 
 if st.button("🚨 Run Test Trade (Buy 1 AAPL)"):
     result = place_test_trade()
-    st.success(result
+    st.success(result)
 

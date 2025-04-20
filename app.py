@@ -1,4 +1,6 @@
 import streamlit as st
+st.set_page_config(page_title="Sentinex AUTO", layout="wide")
+
 import pandas as pd
 import plotly.graph_objects as go
 import requests
@@ -12,17 +14,21 @@ from streamlit_autorefresh import st_autorefresh
 # Discord webhook
 WEBHOOK_URL = "https://discord.com/api/webhooks/1363368522734108772/0gES_N4GWVjPDW987hM1iwGg6eYs2fLZNa6P6up_7FC7H4etTJvPT2j_dN4CiXqaQHDV"
 
-# Refresh every 60 seconds
+# Auto-refresh every 60s
 st_autorefresh(interval=60000, key="auto_refresh")
 
-# Page setup
-st.set_page_config(page_title="Sentinex AUTO", layout="wide")
-st.title("🤖 Sentinex Auto RSI Bot — BTC/USD (60s refresh)")
+st.title("🤖 Sentinex Auto RSI Bot — BTC/USD (w/ Trailing Stop + P&L)")
 
 client = CryptoHistoricalDataClient()
 
 if "trades" not in st.session_state:
     st.session_state["trades"] = []
+if "holding" not in st.session_state:
+    st.session_state["holding"] = None
+if "max_price" not in st.session_state:
+    st.session_state["max_price"] = 0
+if "realized_pnl" not in st.session_state:
+    st.session_state["realized_pnl"] = 0
 
 def calculate_rsi(close, period=14):
     delta = close.diff()
@@ -31,8 +37,7 @@ def calculate_rsi(close, period=14):
     avg_gain = gain.rolling(window=period).mean()
     avg_loss = loss.rolling(window=period).mean()
     rs = avg_gain / avg_loss
-    rsi = 100 - (100 / (1 + rs))
-    return rsi
+    return 100 - (100 / (1 + rs))
 
 def send_discord_alert(trade):
     msg = {
@@ -48,29 +53,46 @@ end = datetime.utcnow()
 start = end - timedelta(days=1)
 params = CryptoBarsRequest(symbol_or_symbols=["BTC/USD"], timeframe=TimeFrame.Minute, start=start, end=end)
 bars = client.get_crypto_bars(params).df
-df = bars[bars.index.get_level_values(0) == "BTC/USD"]
-df = df.reset_index(level=0, drop=True)
+df = bars[bars.index.get_level_values(0) == "BTC/USD"].reset_index(level=0, drop=True)
 df["rsi"] = calculate_rsi(df["close"])
 
-# Strategy Logic
+# Get latest candle
 latest = df.iloc[-1]
+price = latest["close"]
+time = latest.name
 rsi_value = latest["rsi"]
 
-should_buy = rsi_value < 30
-should_sell = rsi_value > 70
+# Strategy logic + trailing stop
+should_buy = rsi_value < 30 and st.session_state["holding"] is None
+should_sell = rsi_value > 70 and st.session_state["holding"] is not None
+trailing_trigger = False
 
-# Place trade based on condition
+# Update max price while holding
+if st.session_state["holding"] is not None:
+    st.session_state["max_price"] = max(st.session_state["max_price"], price)
+    trailing_stop = st.session_state["max_price"] * 0.97
+    if price < trailing_stop:
+        trailing_trigger = True
+
+# Execute trades
 if should_buy:
-    trade = {"time": latest.name, "price": latest["close"], "type": "BUY"}
+    trade = {"time": time, "price": price, "type": "BUY"}
     st.session_state["trades"].append(trade)
+    st.session_state["holding"] = price
+    st.session_state["max_price"] = price
     send_discord_alert(trade)
-    st.success(f"AUTO BUY at ${trade['price']:,.2f} | RSI: {rsi_value:.2f}")
+    st.success(f"AUTO BUY at ${price:,.2f} | RSI: {rsi_value:.2f}")
 
-elif should_sell:
-    trade = {"time": latest.name, "price": latest["close"], "type": "SELL"}
+elif should_sell or trailing_trigger:
+    buy_price = st.session_state["holding"]
+    pnl = price - buy_price
+    st.session_state["realized_pnl"] += pnl
+    trade = {"time": time, "price": price, "type": "SELL"}
     st.session_state["trades"].append(trade)
+    st.session_state["holding"] = None
+    st.session_state["max_price"] = 0
     send_discord_alert(trade)
-    st.warning(f"AUTO SELL at ${trade['price']:,.2f} | RSI: {rsi_value:.2f}")
+    st.warning(f"AUTO SELL at ${price:,.2f} | P&L: ${pnl:,.2f}")
 
 # Chart
 fig = go.Figure()
@@ -82,7 +104,6 @@ fig.add_trace(go.Candlestick(
     close=df["close"],
     name="BTC/USD"
 ))
-
 for trade in st.session_state["trades"]:
     fig.add_trace(go.Scatter(
         x=[trade["time"]],
@@ -105,3 +126,12 @@ fig.update_layout(
     xaxis_rangeslider_visible=False
 )
 st.plotly_chart(fig, use_container_width=True)
+
+# P&L Display
+st.markdown("### 💸 Realized P&L")
+st.metric(label="Profit / Loss", value=f"${st.session_state['realized_pnl']:,.2f}")
+
+if st.session_state["holding"]:
+    unrealized = price - st.session_state["holding"]
+    st.metric(label="Unrealized P&L", value=f"${unrealized:,.2f}")
+

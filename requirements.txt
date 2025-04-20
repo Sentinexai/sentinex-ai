@@ -2,3 +2,4 @@ streamlit
 alpaca-py
 plotly
 pandas
+streamlit-autorefresh

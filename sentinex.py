@@ -1,7 +1,7 @@
 import alpaca_trade_api as tradeapi
 
-API_KEY = "PKT8EXDCQYZ3G5ZAUQ35"
-SECRET_KEY = "2mhc4bkAp1sZTkWApcNMhxMPci9rXPuTeG3ZLGdO"
+API_KEY = "PKLDL1CN0ATYYGPULLXK"
+SECRET_KEY = "JZm7RcmNUb9k4OPhqRu2OOuUPVSRpwqrbf7NRs1M"
 BASE_URL = "https://paper-api.alpaca.markets"
 
 api = tradeapi.REST(API_KEY, SECRET_KEY, BASE_URL, api_version='v2')
@@ -27,4 +27,5 @@ def place_test_trade(symbol="AAPL", qty=1, side="buy"):
         return f"Trade executed: {side.upper()} {qty} {symbol}"
     except Exception as e:
         return f"Trade failed: {e}"
+
 

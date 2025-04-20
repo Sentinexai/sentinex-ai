@@ -64,6 +64,11 @@ for symbol in ASSETS:
     request = CryptoBarsRequest(symbol_or_symbols=[symbol], timeframe=TimeFrame.Minute, start=start, end=end)
     bars = client.get_crypto_bars(request).df
     df = bars[bars.index.get_level_values(0) == symbol].reset_index()
+
+    if "close" not in df.columns or df.empty:
+        st.warning(f"No data for {symbol}, skipping...")
+        continue
+
     df["rsi"] = calculate_rsi(df["close"])
     heat = calculate_heat_score(df)
 
@@ -124,3 +129,4 @@ if not log_df.empty:
     st.dataframe(log_df.tail(15))
     csv = log_df.to_csv(index=False).encode("utf-8")
     st.download_button("ðŸ“¥ Download Trade Log (CSV)", data=csv, file_name="sentinex_trades.csv", mime="text/csv")
+

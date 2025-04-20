@@ -1,3 +1,4 @@
+
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -107,13 +108,6 @@ fig.update_layout(
     xaxis_rangeslider_visible=False
 )
 st.plotly_chart(fig, use_container_width=True)
-
-
-
-
-
-
-
 
 
 

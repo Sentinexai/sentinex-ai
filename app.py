@@ -1,28 +1,60 @@
-
 import streamlit as st
-from sentinex import get_account_info, place_test_trade
+import pandas as pd
+import plotly.graph_objects as go
+from alpaca.data.historical import StockHistoricalDataClient
+from alpaca.data.requests import StockBarsRequest
+from alpaca.data.timeframe import TimeFrame
+from datetime import datetime, timedelta
 
-st.set_page_config(page_title="Sentinex AI", layout="wide")
+API_KEY = "PKLDL1CN0ATYYGPULLXK"
+SECRET_KEY = "JZm7RcmNUb9k4OPhqRu2OOuUPVSRpwqrbf7NRs1M"
 
-st.title("🚀 Sentinex AI Dashboard")
-st.subheader("Real-time Market Sentiment & Auto Trading Bot")
-st.markdown("---")
+client = StockHistoricalDataClient(API_KEY, SECRET_KEY)
 
-st.write("🔐 Connecting to Alpaca Paper Trading...")
+st.set_page_config(page_title="Sentinex Chart", layout="wide")
+st.title("📈 Live AAPL Chart with Trade Timeframes")
+
+timeframes = {
+    "1 Minute": TimeFrame.Minute,
+    "2 Minute": TimeFrame(2, TimeFrame.Unit.Minute),
+    "5 Minute": TimeFrame(5, TimeFrame.Unit.Minute),
+    "10 Minute": TimeFrame(10, TimeFrame.Unit.Minute),
+    "15 Minute": TimeFrame(15, TimeFrame.Unit.Minute)
+}
+
+selected_tf = st.selectbox("Choose Timeframe", list(timeframes.keys()))
+
+end = datetime.utcnow()
+start = end - timedelta(days=1)
+
+request_params = StockBarsRequest(
+    symbol_or_symbols=["AAPL"],
+    timeframe=timeframes[selected_tf],
+    start=start,
+    end=end
+)
 
 try:
-    account_info = get_account_info()
-    st.success("✅ Connected to Alpaca")
-    st.write("💰 Buying Power:", account_info["buying_power"])
-    st.write("💵 Cash:", account_info["cash"])
-    st.write("📊 Portfolio Value:", account_info["portfolio_value"])
-    st.write("🟢 Status:", account_info["status"])
+    bars = client.get_stock_bars(request_params).df
+    df = bars[bars.index.get_level_values(0) == "AAPL"]
+
+    fig = go.Figure(data=[go.Candlestick(
+        x=df.index.get_level_values(1),
+        open=df["open"],
+        high=df["high"],
+        low=df["low"],
+        close=df["close"]
+    )])
+
+    fig.update_layout(
+        title=f"AAPL - {selected_tf} Chart",
+        xaxis_title="Time",
+        yaxis_title="Price",
+        xaxis_rangeslider_visible=False
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
 except Exception as e:
-    st.error(f"❌ Failed to connect: {e}")
+    st.error(f"Failed to load chart data: {e}")
 
-st.markdown("---")
-
-if st.button("🚨 Run Test Trade (Buy 1 AAPL)"):
-    result = place_test_trade()
-    st.success(result)
 

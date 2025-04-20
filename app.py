@@ -1,4 +1,3 @@
-
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
@@ -37,9 +36,7 @@ def calculate_rsi(close, period=14):
 
 def send_discord_alert(trade):
     msg = {
-        "content": f"📍 **Sentinex AUTO Trade**
-**{trade['type']}** BTC/USD at `${trade['price']:,.2f}`
-🕒 {trade['time'].strftime('%Y-%m-%d %H:%M:%S UTC')}`"
+        "content": f"📍 **Sentinex AUTO Trade**\n**{trade['type']}** BTC/USD at `${trade['price']:,.2f}`\n🕒 {trade['time'].strftime('%Y-%m-%d %H:%M:%S UTC')}`"
     }
     try:
         requests.post(WEBHOOK_URL, json=msg)
@@ -108,7 +105,3 @@ fig.update_layout(
     xaxis_rangeslider_visible=False
 )
 st.plotly_chart(fig, use_container_width=True)
-
-
-
-

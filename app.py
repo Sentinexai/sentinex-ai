@@ -124,4 +124,3 @@ if not log_df.empty:
     st.dataframe(log_df.tail(15))
     csv = log_df.to_csv(index=False).encode("utf-8")
     st.download_button("ðŸ“¥ Download Trade Log (CSV)", data=csv, file_name="sentinex_trades.csv", mime="text/csv")
-

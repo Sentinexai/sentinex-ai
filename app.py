@@ -14,13 +14,16 @@ client = StockHistoricalDataClient(API_KEY, SECRET_KEY)
 st.set_page_config(page_title="Sentinex Chart", layout="wide")
 st.title("📈 Live AAPL Chart with Trade Timeframes")
 
+from alpaca.data.timeframe import TimeFrame
+
 timeframes = {
     "1 Minute": TimeFrame.Minute,
-    "5 Minute": TimeFrame.FiveMinutes,
-    "15 Minute": TimeFrame.FifteenMinutes,
+    "5 Minutes": TimeFrame(5, "Minute"),
+    "15 Minutes": TimeFrame(15, "Minute"),
     "1 Hour": TimeFrame.Hour,
     "1 Day": TimeFrame.Day
 }
+
 
 selected_tf = st.selectbox("Choose Timeframe", list(timeframes.keys()))
 

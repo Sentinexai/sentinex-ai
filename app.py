@@ -1,24 +1,23 @@
-
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+import requests
 from alpaca.data.historical import CryptoHistoricalDataClient
 from alpaca.data.requests import CryptoBarsRequest
 from alpaca.data.timeframe import TimeFrame
 from datetime import datetime, timedelta
 
-# Setup page
-st.set_page_config(page_title="Sentinex BTC Chart + Trade Markers", layout="wide")
-st.title("📈 Live BTC/USD Chart with Trade Timeframes + Simulated Trades")
+# Discord webhook URL
+WEBHOOK_URL = "https://discord.com/api/webhooks/1363368522734108772/0gES_N4GWVjPDW987hM1iwGg6eYs2fLZNa6P6up_7FC7H4etTJvPT2j_dN4CiXqaQHDV"
 
-# Alpaca crypto client (no API key needed for crypto)
+st.set_page_config(page_title="Sentinex BTC Chart + Trade Markers", layout="wide")
+st.title("📈 Live BTC/USD Chart with Trade Timeframes + Discord Alerts")
+
 client = CryptoHistoricalDataClient()
 
-# Trade memory
 if "trades" not in st.session_state:
     st.session_state["trades"] = []
 
-# Timeframe selector
 timeframes = {
     "1 Minute": TimeFrame.Minute,
     "5 Minutes": TimeFrame(5, "Minute"),
@@ -28,11 +27,9 @@ timeframes = {
 }
 selected_tf = st.selectbox("Choose Timeframe", list(timeframes.keys()))
 
-# Time range
 end = datetime.utcnow()
 start = end - timedelta(days=1)
 
-# Data request
 request_params = CryptoBarsRequest(
     symbol_or_symbols=["BTC/USD"],
     timeframe=timeframes[selected_tf],
@@ -40,13 +37,22 @@ request_params = CryptoBarsRequest(
     end=end
 )
 
-# Fetch and display
+def send_discord_alert(trade):
+    message = {
+        "content": f"📍 **Sentinex Trade Alert**
+**BUY** BTC/USD at `${trade['price']:,.2f}`
+🕒 {trade['time'].strftime('%Y-%m-%d %H:%M:%S UTC')}"
+    }
+    try:
+        requests.post(WEBHOOK_URL, json=message)
+    except Exception as e:
+        st.error(f"Failed to send Discord alert: {e}")
+
 try:
     bars = client.get_crypto_bars(request_params).df
     df = bars[bars.index.get_level_values(0) == "BTC/USD"]
     df = df.reset_index(level=0, drop=True)
 
-    # Simulate trade button
     if st.button("💥 Simulate Buy Trade"):
         latest = df.iloc[-1]
         trade = {
@@ -55,11 +61,10 @@ try:
         }
         st.session_state["trades"].append(trade)
         st.success(f"Trade logged at {trade['time']} | Price: ${trade['price']:,.2f}")
+        send_discord_alert(trade)
 
-    # Chart
     fig = go.Figure()
 
-    # Candlestick chart
     fig.add_trace(go.Candlestick(
         x=df.index,
         open=df["open"],
@@ -69,7 +74,6 @@ try:
         name="BTC/USD"
     ))
 
-    # Overlay trades
     for trade in st.session_state["trades"]:
         fig.add_trace(go.Scatter(
             x=[trade["time"]],
@@ -91,4 +95,5 @@ try:
     st.plotly_chart(fig, use_container_width=True)
 except Exception as e:
     st.error(f"Failed to load chart data: {e}")
+
 

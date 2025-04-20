@@ -16,10 +16,10 @@ st.title("📈 Live AAPL Chart with Trade Timeframes")
 
 timeframes = {
     "1 Minute": TimeFrame.Minute,
-    "2 Minute": TimeFrame(2, TimeFrame.Unit.Minute),
-    "5 Minute": TimeFrame(5, TimeFrame.Unit.Minute),
-    "10 Minute": TimeFrame(10, TimeFrame.Unit.Minute),
-    "15 Minute": TimeFrame(15, TimeFrame.Unit.Minute)
+    "2 Minute": TimeFrame.Minute(2),
+    "5 Minute": TimeFrame.Minute(5),
+    "10 Minute": TimeFrame.Minute(10),
+    "15 Minute": TimeFrame.Minute(15)
 }
 
 selected_tf = st.selectbox("Choose Timeframe", list(timeframes.keys()))

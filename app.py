@@ -10,14 +10,18 @@ from datetime import datetime, timedelta
 # Discord webhook URL
 WEBHOOK_URL = "https://discord.com/api/webhooks/1363368522734108772/0gES_N4GWVjPDW987hM1iwGg6eYs2fLZNa6P6up_7FC7H4etTJvPT2j_dN4CiXqaQHDV"
 
-st.set_page_config(page_title="Sentinex BTC Chart + Trade Markers", layout="wide")
-st.title("📈 Live BTC/USD Chart with Trade Timeframes + Discord Alerts")
+# Set page
+st.set_page_config(page_title="Sentinex PRO", layout="wide")
+st.title("📈 Sentinex PRO: BTC/USD Chart, Trades, Discord Alerts & Export")
 
+# Client for crypto data
 client = CryptoHistoricalDataClient()
 
+# Initialize session state
 if "trades" not in st.session_state:
     st.session_state["trades"] = []
 
+# Timeframes
 timeframes = {
     "1 Minute": TimeFrame.Minute,
     "5 Minutes": TimeFrame(5, "Minute"),
@@ -30,6 +34,7 @@ selected_tf = st.selectbox("Choose Timeframe", list(timeframes.keys()))
 end = datetime.utcnow()
 start = end - timedelta(days=1)
 
+# Request setup
 request_params = CryptoBarsRequest(
     symbol_or_symbols=["BTC/USD"],
     timeframe=timeframes[selected_tf],
@@ -37,34 +42,44 @@ request_params = CryptoBarsRequest(
     end=end
 )
 
+# Discord notification
 def send_discord_alert(trade):
     message = {
-        "content": f"📍 **Sentinex Trade Alert**
-**BUY** BTC/USD at `${trade['price']:,.2f}`
-🕒 {trade['time'].strftime('%Y-%m-%d %H:%M:%S UTC')}"
+        "content": f"📍 **Sentinex Trade Alert**\n**{trade['type']}** BTC/USD at `${trade['price']:,.2f}`\n🕒 {trade['time'].strftime('%Y-%m-%d %H:%M:%S UTC')}"
     }
     try:
         requests.post(WEBHOOK_URL, json=message)
     except Exception as e:
         st.error(f"Failed to send Discord alert: {e}")
 
+# Pull data
 try:
     bars = client.get_crypto_bars(request_params).df
     df = bars[bars.index.get_level_values(0) == "BTC/USD"]
     df = df.reset_index(level=0, drop=True)
 
-    if st.button("💥 Simulate Buy Trade"):
-        latest = df.iloc[-1]
+    latest = df.iloc[-1]
+    if st.button("💥 Simulate BUY Trade"):
         trade = {
             "time": latest.name,
-            "price": latest["close"]
+            "price": latest["close"],
+            "type": "BUY"
         }
         st.session_state["trades"].append(trade)
-        st.success(f"Trade logged at {trade['time']} | Price: ${trade['price']:,.2f}")
         send_discord_alert(trade)
+        st.success(f"BUY trade logged at {trade['time']} | ${trade['price']:,.2f}")
+
+    if st.button("🔻 Simulate SELL Trade"):
+        trade = {
+            "time": latest.name,
+            "price": latest["close"],
+            "type": "SELL"
+        }
+        st.session_state["trades"].append(trade)
+        send_discord_alert(trade)
+        st.warning(f"SELL trade logged at {trade['time']} | ${trade['price']:,.2f}")
 
     fig = go.Figure()
-
     fig.add_trace(go.Candlestick(
         x=df.index,
         open=df["open"],
@@ -79,10 +94,14 @@ try:
             x=[trade["time"]],
             y=[trade["price"]],
             mode="markers+text",
-            marker=dict(color="green", size=10, symbol="arrow-up"),
-            text=["BUY"],
+            marker=dict(
+                color="green" if trade["type"] == "BUY" else "red",
+                size=10,
+                symbol="arrow-up" if trade["type"] == "BUY" else "arrow-down"
+            ),
+            text=[trade["type"]],
             textposition="top center",
-            name="Buy Marker"
+            name=trade["type"]
         ))
 
     fig.update_layout(
@@ -91,10 +110,17 @@ try:
         yaxis_title="Price (USD)",
         xaxis_rangeslider_visible=False
     )
-
     st.plotly_chart(fig, use_container_width=True)
+
+    # Export to CSV
+    if st.session_state["trades"]:
+        df_trades = pd.DataFrame(st.session_state["trades"])
+        csv = df_trades.to_csv(index=False).encode("utf-8")
+        st.download_button("📥 Download Trade Log (CSV)", data=csv, file_name="sentinex_trades.csv", mime="text/csv")
+
 except Exception as e:
     st.error(f"Failed to load chart data: {e}")
+
 
 
 

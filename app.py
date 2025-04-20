@@ -6,10 +6,10 @@ from alpaca.data.requests import CryptoBarsRequest
 from alpaca.data.timeframe import TimeFrame
 from datetime import datetime, timedelta
 
-client = CryptoHistoricalDataClient()
-
-st.set_page_config(page_title="Sentinex Chart", layout="wide")
+st.set_page_config(page_title="Sentinex BTC Chart", layout="wide")
 st.title("📈 Live BTC/USD Chart with Trade Timeframes")
+
+client = CryptoHistoricalDataClient()
 
 timeframes = {
     "1 Minute": TimeFrame.Minute,
@@ -31,4 +31,26 @@ request_params = CryptoBarsRequest(
     end=end
 )
 
+try:
+    bars = client.get_crypto_bars(request_params).df
+    df = bars[bars.index.get_level_values(0) == "BTC/USD"]
+
+    fig = go.Figure(data=[go.Candlestick(
+        x=df.index.get_level_values(1),
+        open=df["open"],
+        high=df["high"],
+        low=df["low"],
+        close=df["close"]
+    )])
+
+    fig.update_layout(
+        title=f"BTC/USD - {selected_tf} Chart",
+        xaxis_title="Time",
+        yaxis_title="Price (USD)",
+        xaxis_rangeslider_visible=False
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+except Exception as e:
+    st.error(f"Failed to load chart data: {e}")
 

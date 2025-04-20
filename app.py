@@ -32,7 +32,7 @@ end = datetime.utcnow()
 start = end - timedelta(days=1)
 
 request_params = StockBarsRequest(
-    symbol_or_symbols=["AAPL"],
+    symbol_or_symbols=["BTC/USD"],
     timeframe=timeframes[selected_tf],
     start=start,
     end=end

@@ -1,3 +1,4 @@
 streamlit
-alpaca-trade-api
-requests
+alpaca-py
+plotly
+pandas

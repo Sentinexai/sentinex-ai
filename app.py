@@ -40,7 +40,7 @@ request_params = StockBarsRequest(
 
 try:
     bars = client.get_stock_bars(request_params).df
-    df = bars[bars.index.get_level_values(0) == "AAPL"]
+    df = bars[bars.index.get_level_values(0) == "BTC/USD"]
 
     fig = go.Figure(data=[go.Candlestick(
         x=df.index.get_level_values(1),

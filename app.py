@@ -8,19 +8,34 @@ API_KEY = 'PKHSYF5XH92B8VFNAJFD'
 SECRET_KEY = '89KOB1vOSn2c3HeGorQe6zkKa0F4tFgBjbIAisCf'
 BASE_URL = 'https://paper-api.alpaca.markets'
 
-SMALL_CAPS = ["NKLA", "MARA", "RIOT", "SNDL", "SOFI", "PLTR", "CLSK", "BBBY", "TLRY", "IDEX"]
-CRYPTO_TICKERS = ["BTCUSD", "ETHUSD", "SOLUSD", "DOGEUSD"]
+# Expanded small cap list (update as you like)
+SMALL_CAPS = [
+    "NKLA", "MARA", "RIOT", "SNDL", "SOFI", "PLTR", "CLSK", "BBBY", "TLRY", "IDEX",
+    "GME", "AMC", "CVNA", "AI", "NVAX", "BBBYQ", "LCID", "TSLA", "NIO", "BILI",
+    "FFIE", "APE", "AMTD", "CEI", "VERU", "IONQ", "QS", "DNA", "OSTK", "VYNE", "BBIG"
+]
+
+# Expanded crypto list (update as you like)
+CRYPTO_TICKERS = [
+    "BTCUSD", "ETHUSD", "SOLUSD", "DOGEUSD", "SHIBUSD", "AVAXUSD", "ADAUSD", "MATICUSD",
+    "XRPUSD", "LINKUSD", "OPUSD", "PEPEUSD", "WIFUSD", "ARBUSD", "SEIUSD", "TONUSD",
+    "BNBUSD", "RNDRUSD", "INJUSD", "TIAUSD"
+]
 
 LOOKBACK = 21  # Minutes for RSI and volume calc
 RSI_BUY = 20   # RSI buy threshold
 RSI_SELL = 80  # RSI sell threshold
 VOL_SPIKE = 2  # x avg volume spike
 
+# Use small size for $500 simulation (e.g., $20-25 per trade)
+STOCK_QTY = 1
+CRYPTO_QTY = 0.002  # e.g., 0.002 BTC ≈ $15-20
+
 # ========== INIT ==========
 api = REST(API_KEY, SECRET_KEY, BASE_URL)
 
 st.set_page_config(page_title="Sentinex Sniper", layout="wide")
-st.title("🤖 Sentinex Sniper Bot — Only A+ Trades!")
+st.title("🤖 Sentinex Sniper Bot — Only A+ Trades! ($500 Paper Trading Sim)")
 
 def calculate_rsi(prices, window=14):
     delta = prices.diff()
@@ -53,7 +68,7 @@ def confluence_signal(bars):
         return None
 
 # ========== MAIN LOGIC ==========
-st.header("🔎 Scanning for A+ setups...")
+st.header("🔎 Scanning for A+ setups in Small Caps...")
 
 for symbol in SMALL_CAPS:
     bars = get_data(symbol)
@@ -62,13 +77,14 @@ for symbol in SMALL_CAPS:
         continue
     signal = confluence_signal(bars)
     st.write(f"{symbol}: {signal or 'No trade'}")
-    # To auto-trade, uncomment:
+    # UNCOMMENT below for auto trading (be careful with real $)
     # if signal == "BUY":
-    #     api.submit_order(symbol=symbol, qty=1, side='buy', type='market', time_in_force='gtc')
+    #     api.submit_order(symbol=symbol, qty=STOCK_QTY, side='buy', type='market', time_in_force='gtc')
     # elif signal == "SELL":
-    #     api.submit_order(symbol=symbol, qty=1, side='sell', type='market', time_in_force='gtc')
+    #     api.submit_order(symbol=symbol, qty=STOCK_QTY, side='sell', type='market', time_in_force='gtc')
 
 st.header("💎 Crypto Mode (A+ signals)")
+
 for symbol in CRYPTO_TICKERS:
     bars = get_data(symbol)
     if bars is None or len(bars) < LOOKBACK:
@@ -76,12 +92,10 @@ for symbol in CRYPTO_TICKERS:
         continue
     signal = confluence_signal(bars)
     st.write(f"{symbol}: {signal or 'No trade'}")
-    # To auto-trade, uncomment:
+    # UNCOMMENT below for auto trading (be careful with real $)
     # if signal == "BUY":
-    #     api.submit_order(symbol=symbol, qty=0.01, side='buy', type='market', time_in_force='gtc')
+    #     api.submit_order(symbol=symbol, qty=CRYPTO_QTY, side='buy', type='market', time_in_force='gtc')
     # elif signal == "SELL":
-    #     api.submit_order(symbol=symbol, qty=0.01, side='sell', type='market', time_in_force='gtc')
+    #     api.submit_order(symbol=symbol, qty=CRYPTO_QTY, side='sell', type='market', time_in_force='gtc')
 
-st.info("Sniper mode: **Only the best confluence signals will trigger trades!** To enable auto-trading, uncomment the submit_order lines in the code. For trailing stop and position management, just say the word!")
-
-
+st.info("Simulating $500 account: trade size is set small. To go fully auto, uncomment the 'submit_order' lines. \nWant trailing stops, sentiment, or more auto-risk controls? Just ask!")

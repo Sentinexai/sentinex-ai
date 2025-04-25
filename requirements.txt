@@ -1,5 +1,7 @@
 streamlit
 alpaca-py
-plotly
 pandas
-streamlit-autorefresh
+numpy
+plotly
+gspread
+oauth2client

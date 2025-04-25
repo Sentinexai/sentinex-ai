@@ -4,8 +4,8 @@ import pandas as pd
 import numpy as np
 
 # ========== CONFIGURATION ==========
-API_KEY = 'PKHSYF5XH92B8VFNAJFD'  # Replace with your Alpaca API Key
-SECRET_KEY = '89KOB1vOSn2c3HeGorQe6zkKa0F4tFgBjbIAisCf'  # Replace with your Alpaca Secret Key
+API_KEY = 'PKHSYF5XH92B8VFNAJFD'  
+SECRET_KEY = '89KOB1vOSn2c3HeGorQe6zkKa0F4tFgBjbIAisCf'  
 BASE_URL = 'https://paper-api.alpaca.markets'
 
 # Small Cap Stocks with price filter (change based on your needs)

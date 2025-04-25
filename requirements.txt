@@ -1,6 +1,8 @@
 alpaca-trade-api
-alpaca-py
 streamlit
 pandas
 numpy
 plotly
+requests  # For making HTTP requests (can be useful for external API calls)
+gspread  # For Google Sheets integration (if using it for logging or trading data)
+oauth2client  # For Google Sheets authentication (optional if needed)

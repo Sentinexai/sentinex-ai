@@ -32,11 +32,13 @@ st.title("🤖 Sentinex Sniper Bot — Only A+ Trades! (Crypto Mode)")
 
 # ========== DATA FETCHING ==========
 
-# Function to fetch data for supported cryptos dynamically from Alpaca
+# Function to fetch supported crypto tickers dynamically from Alpaca
 def fetch_supported_crypto():
     try:
         assets = api.list_assets()
-        crypto_assets = [asset.symbol for asset in assets if asset.asset_class == 'crypto']
+        crypto_assets = [asset.symbol for asset in assets if hasattr(asset, 'asset_class') and asset.asset_class == 'crypto']
+        if len(crypto_assets) == 0:
+            st.warning("No crypto assets found in Alpaca API.")
         return crypto_assets
     except Exception as e:
         st.error(f"Error fetching assets: {str(e)}")

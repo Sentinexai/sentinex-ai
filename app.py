@@ -1,12 +1,11 @@
-# Import necessary libraries
 import streamlit as st
 import pandas as pd
 import numpy as np
 from alpaca_trade_api.rest import REST, TimeFrame
 
 # ========== CONFIGURATION ==========
-API_KEY = 'PKHSYF5XH92B8VFNAJFD'
-SECRET_KEY = '89KOB1vOSn2c3HeGorQe6zkKa0F4tFgBjbIAisCf'
+API_KEY = 'PKHSYF5XH92B8VFNAJFD'  # Replace with your Alpaca API key
+SECRET_KEY = '89KOB1vOSn2c3HeGorQe6zkKa0F4tFgBjbIAisCf'  # Replace with your Alpaca secret key
 BASE_URL = 'https://paper-api.alpaca.markets'
 LOOKBACK = 21  # Number of minutes for RSI calculation
 RSI_BUY = 30   # RSI buy threshold
@@ -33,7 +32,8 @@ def fetch_supported_crypto_tickers():
     """Fetch supported crypto tickers."""
     try:
         assets = api.list_assets()
-        crypto_tickers = [asset.symbol for asset in assets if asset.crypto and asset.tradable]
+        # Filter only crypto assets
+        crypto_tickers = [asset.symbol for asset in assets if asset.asset_class == 'crypto' and asset.tradable]
         
         if not crypto_tickers:
             st.warning("No supported crypto tickers found.")

@@ -2,7 +2,6 @@ import streamlit as st
 from alpaca_trade_api.rest import REST, TimeFrame
 import pandas as pd
 import numpy as np
-import requests
 
 # ========== CONFIGURATION ==========
 API_KEY = 'PKHSYF5XH92B8VFNAJFD'
@@ -70,7 +69,7 @@ st.header("🔎 Scanning for A+ setups in Crypto...")
 for symbol in CRYPTO_TICKERS:
     bars = get_data(symbol)
     if bars is None or len(bars) < LOOKBACK:
-        st.write(f"{symbol}: No data.")
+        st.write(f"{symbol}: No data or error fetching data.")
         continue
     signal = confluence_signal(bars)
     st.write(f"{symbol}: {signal or 'No trade'}")
@@ -81,7 +80,6 @@ for symbol in CRYPTO_TICKERS:
     #     api.submit_order(symbol=symbol, qty=CRYPTO_QTY, side='sell', type='market', time_in_force='gtc')
 
 st.info("Simulating trades with small account size, adjust accordingly for real trading. \nTo go fully auto, uncomment the 'submit_order' lines.")
-
 
 
 

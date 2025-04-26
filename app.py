@@ -89,3 +89,4 @@ st.info("Simulating trades with small account size, adjust accordingly for real 
 
 
 
+

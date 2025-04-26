@@ -4,8 +4,8 @@ import numpy as np
 from alpaca_trade_api.rest import REST, TimeFrame, APIError
 
 # ========== CONFIGURATION ==========
-API_KEY = 'PKHSYF5XH92B8VFNAJFD' 
-SECRET_KEY = '89KOB1vOSn2c3HeGorQe6zkKa0F4tFgBjbIAisCf'  
+API_KEY = 'PKHSYF5XH92B8VFNAJFD'  # Replace with your Alpaca API key
+SECRET_KEY = '89KOB1vOSn2c3HeGorQe6zkKa0F4tFgBjbIAisCf'  # Replace with your Alpaca secret key
 BASE_URL = 'https://paper-api.alpaca.markets'
 LOOKBACK = 21  # Number of minutes for RSI calculation
 RSI_BUY = 30   # RSI buy threshold
@@ -32,13 +32,14 @@ def fetch_supported_crypto_tickers():
     """Fetch supported crypto tickers."""
     try:
         assets = api.list_assets()
+        
         # Filter for tradable crypto assets
-        crypto_tickers = [asset.symbol for asset in assets if asset.tradable and asset.exchange == 'CRYPTO']
+        crypto_tickers = [asset.symbol for asset in assets if asset.tradable and asset.exchange == 'CRYPTO'] 
         
         if not crypto_tickers:
             st.warning("No available cryptocurrency tickers found.")
         else:
-            st.success(f"Supported available cryptocurrency tickers: {crypto_tickers}")
+            st.success(f"Supported available cryptocurrency tickers: {crypto_tickers}")  # Display fetched tickers
         
         return crypto_tickers
     except Exception as e:
@@ -48,8 +49,15 @@ def fetch_supported_crypto_tickers():
 def get_data(symbol):
     """Fetch historical price data for the given symbol."""
     try:
-        # Fetch historical bars for the specified symbol using TimeFrame
-        bars = api.get_bars(symbol, TimeFrame.Minute, limit=LOOKBACK).df
+        # Remove the paired currency suffix and fetch historical data.
+        # The API might require the base asset only. You can decide
+        # to fetch either the base asset or handle traded pairs based on your logic.
+        if '/' in symbol:
+            base_asset = symbol.split('/')[0]
+        else:
+            base_asset = symbol
+            
+        bars = api.get_bars(base_asset, TimeFrame.Minute, limit=LOOKBACK).df
         
         if bars.empty:
             st.warning(f"No historical data available for {symbol}.")

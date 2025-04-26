@@ -1,99 +1,70 @@
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
+import numpy as np
+import datetime
 from alpaca_trade_api.rest import REST, TimeFrame
 import time
+import requests
 
-# --- Alpaca API Credentials ---
 API_KEY = "PKHSYF5XH92B8VFNAJFD"
 SECRET_KEY = "89KOB1vOSn2c3HeGorQe6zkKa0F4tFgBjbIAisCf"
 BASE_URL = "https://paper-api.alpaca.markets"
+api = REST(API_KEY, SECRET_KEY, BASE_URL)
 
-SYMBOL = "BTCUSD"  # Alpaca expects BTCUSD, not BTC/USD
-QTY_PER_TRADE = 0.0001  # Small size for demo
+# Download S&P 500 tickers live
+def get_sp500():
+    url = 'https://datahub.io/core/s-and-p-500-companies/r/constituents.csv'
+    df = pd.read_csv(url)
+    return df['Symbol'].tolist()
 
-SMA_FAST = 12
-SMA_SLOW = 24
+TICKERS = get_sp500()
 
-@st.cache_resource
-def get_api():
-    return REST(API_KEY, SECRET_KEY, BASE_URL)
+def get_rsi(prices, window=14):
+    delta = prices.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
+    rs = gain / loss
+    return 100 - (100 / (1 + rs))
 
-def get_bars(symbol=SYMBOL):
-    api = get_api()
-    bars = api.get_crypto_bars(symbol, TimeFrame.Minute, limit=100).df
-    bars = bars[bars.exchange == 'CBSE']  # Use Coinbase data only
-    bars = bars.copy()
-    bars['sma_fast'] = bars['close'].rolling(SMA_FAST).mean()
-    bars['sma_slow'] = bars['close'].rolling(SMA_SLOW).mean()
-    return bars
+trade_log = []
+win = 0
+loss = 0
 
-def get_position(symbol=SYMBOL):
-    api = get_api()
-    positions = api.list_positions()
-    for p in positions:
-        if p.symbol == symbol:
-            return float(p.qty)
-    return 0
-
-def submit_order(side, qty=QTY_PER_TRADE, symbol=SYMBOL):
-    api = get_api()
-    try:
-        api.submit_order(symbol=symbol, qty=qty, side=side, type='market', time_in_force='gtc')
-        st.success(f"Order submitted: {side.upper()} {qty} {symbol}")
-    except Exception as e:
-        st.error(f"Order error: {e}")
-
-def plot_chart(bars):
-    fig = go.Figure(data=[go.Candlestick(
-        x=bars.index,
-        open=bars['open'],
-        high=bars['high'],
-        low=bars['low'],
-        close=bars['close'],
-        name='Candles'
-    )])
-    fig.add_trace(go.Scatter(
-        x=bars.index, y=bars["sma_fast"], line=dict(color='green', width=1), name=f"SMA{SMA_FAST}"
-    ))
-    fig.add_trace(go.Scatter(
-        x=bars.index, y=bars["sma_slow"], line=dict(color='red', width=1), name=f"SMA{SMA_SLOW}"
-    ))
-    st.plotly_chart(fig, use_container_width=True)
-
-st.title("📈 Alpaca Crypto Paper Trading Bot (BTCUSD, CBSE)")
-bars = get_bars()
-if not bars.empty:
-    plot_chart(bars)
-    st.write(bars.tail(10))
-else:
-    st.error("No market data available. Check symbol or API limits.")
-
-position = get_position()
-st.write(f"Current BTCUSD position: {position}")
-
-if st.button("Run Bot Step"):
-    if len(bars) < SMA_SLOW + 1:
-        st.warning("Not enough data for moving averages.")
-    else:
-        should_buy = bars['sma_fast'].iloc[-1] > bars['sma_slow'].iloc[-1]
-        should_sell = bars['sma_fast'].iloc[-1] < bars['sma_slow'].iloc[-1]
-        if position == 0 and should_buy:
-            submit_order('buy')
-        elif position > 0 and should_sell:
-            submit_order('sell', qty=position)
-        else:
-            st.info("No trade signal.")
-
-if st.button("Force Sell All"):
-    if position > 0:
-        submit_order('sell', qty=position)
-    else:
-        st.info("No position to sell.")
-
-# Account info
-api = get_api()
-account = api.get_account()
-st.write(f"Equity: ${account.equity}")
-st.write(f"Buying Power: ${account.buying_power}")
-
+while True:
+    for symbol in TICKERS:
+        try:
+            bars = api.get_bars(symbol, TimeFrame.Minute, limit=20).df
+            if bars.empty or bars['volume'].iloc[-1] < 5000 or bars['close'].iloc[-1] < 5:  # Skip low volume or penny stocks
+                continue
+            bars['rsi'] = get_rsi(bars['close'])
+            latest_rsi = bars['rsi'].iloc[-1]
+            position_qty = 0
+            positions = api.list_positions()
+            for pos in positions:
+                if pos.symbol == symbol:
+                    position_qty = float(pos.qty)
+            # Aggressive logic for more trades
+            if latest_rsi < 45 and position_qty == 0:
+                api.submit_order(symbol=symbol, qty=1, side='buy', type='market', time_in_force='gtc')
+                trade_log.append((symbol, "BUY", bars['close'].iloc[-1], datetime.datetime.now()))
+                print(f"BUY {symbol} @ {bars['close'].iloc[-1]:.2f} | RSI: {latest_rsi:.2f}")
+            elif latest_rsi > 55 and position_qty > 0:
+                api.submit_order(symbol=symbol, qty=position_qty, side='sell', type='market', time_in_force='gtc')
+                sell_price = bars['close'].iloc[-1]
+                # Find buy price in trade log for P&L
+                for log in reversed(trade_log):
+                    if log[0] == symbol and log[1] == "BUY":
+                        buy_price = log[2]
+                        break
+                pnl = sell_price - buy_price
+                if pnl > 0:
+                    win += 1
+                else:
+                    loss += 1
+                trade_log.append((symbol, "SELL", sell_price, datetime.datetime.now(), pnl))
+                print(f"SELL {symbol} @ {sell_price:.2f} | RSI: {latest_rsi:.2f} | P&L: {pnl:.2f}")
+                print(f"Wins: {win}, Losses: {loss}, W/L Ratio: {(win/(win+loss)):.2f}")
+        except Exception as e:
+            print(f"Error on {symbol}: {e}")
+    print(f"Total Trades: {len(trade_log)}, Wins: {win}, Losses: {loss}, W/L Ratio: {(win/(win+loss)) if (win+loss)>0 else 0:.2f}")
+    time.sleep(60)  # Run every minute

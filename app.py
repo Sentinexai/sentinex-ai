@@ -96,3 +96,4 @@ for symbol in crypto_tickers:
 st.info("Simulating trades with small account size, adjust accordingly for real trading. To go fully auto, uncomment the 'submit_order' lines.")
 
 
+

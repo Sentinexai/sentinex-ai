@@ -8,6 +8,13 @@ API_KEY = 'PKHSYF5XH92B8VFNAJFD'
 SECRET_KEY = '89KOB1vOSn2c3HeGorQe6zkKa0F4tFgBjbIAisCf'
 BASE_URL = 'https://paper-api.alpaca.markets'
 
+# List of valid crypto tickers (Alpaca-supported)
+CRYPTO_TICKERS = [
+    "BTCUSD", "ETHUSD", "SOLUSD", "DOGEUSD", "SHIBUSD", "AVAXUSD", "ADAUSD", "MATICUSD",
+    "XRPUSD", "LINKUSD", "PEPEUSD", "WIFUSD", "ARBUSD", "SEIUSD", "TONUSD", "BNBUSD", 
+    "RNDRUSD", "INJUSD", "TIAUSD"
+]
+
 # ========== INIT ==========
 api = REST(API_KEY, SECRET_KEY, BASE_URL)
 
@@ -51,29 +58,11 @@ def confluence_signal(bars):
     else:
         return None
 
-# Fetch crypto tickers by listing assets
-def fetch_supported_crypto():
-    try:
-        # Fetch all assets
-        assets = api.list_assets()
-
-        # Filter for crypto assets
-        crypto_assets = [asset.symbol for asset in assets if asset.symbol.endswith("USD")]
-        
-        return crypto_assets
-    except Exception as e:
-        st.error(f"Error fetching assets: {str(e)}")
-        return []
-
 # ========== MAIN LOGIC ==========
 st.header("🔎 Scanning for A+ setups in Crypto...")
 
-# Fetch supported crypto tickers from Alpaca
-crypto_tickers = fetch_supported_crypto()
-st.write(f"Found {len(crypto_tickers)} supported crypto tickers: {crypto_tickers}")
-
 # Loop over available cryptos
-for symbol in crypto_tickers:
+for symbol in CRYPTO_TICKERS:
     bars = get_data(symbol)
     if bars is None or len(bars) < 21:
         st.write(f"{symbol}: No data or error fetching data.")
@@ -87,7 +76,5 @@ for symbol in crypto_tickers:
     #     api.submit_order(symbol=symbol, qty=0.002, side='sell', type='market', time_in_force='gtc')
 
 st.info("Simulating trades with small account size. Adjust accordingly for real trading. \nTo go fully auto, uncomment the 'submit_order' lines.")
-
-
 
 

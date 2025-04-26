@@ -1,144 +1,99 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import plotly.graph_objects as go
-from alpaca_trade_api.rest import REST
-from ta.momentum import RSIIndicator
-from ta.trend import MACD
-from collections import deque
-import random
+from alpaca_trade_api.rest import REST, TimeFrame
 import time
 
-# ===== USER PROVIDED CONFIGURATION =====
+# --- Alpaca API Credentials ---
 API_KEY = "PKHSYF5XH92B8VFNAJFD"
 SECRET_KEY = "89KOB1vOSn2c3HeGorQe6zkKa0F4tFgBjbIAisCf"
 BASE_URL = "https://paper-api.alpaca.markets"
-CRYPTO_SYMBOL = 'BTC/USD'  # Alpaca's crypto format
 
-# ===== SELF-CONTAINED ADVANCED BOT =====
-class AdvancedCryptoTradingSystem:
-    def __init__(self):
-        self.api = REST(API_KEY, SECRET_KEY, BASE_URL)
-        self.trade_history = deque(maxlen=200)
-        self.learning_memory = deque(maxlen=1000)
-        self.position_size = 0.01  # Risk 1% per trade
-        self.current_position = None
-        
-    def get_market_data(self):
-        """Get consolidated crypto data from Alpaca"""
-        try:
-            bars = self.api.get_crypto_bars(CRYPTO_SYMBOL, '15Min', limit=50).df
-            return bars.reset_index()
-        except Exception as e:
-            st.error(f"Data Error: {str(e)}")
-            return pd.DataFrame()
+SYMBOL = "BTCUSD"  # Alpaca expects BTCUSD, not BTC/USD
+QTY_PER_TRADE = 0.0001  # Small size for demo
 
-    def generate_synthetic_news(self):
-        """Simulate news events based on price action"""
-        bars = self.get_market_data()
-        if len(bars) < 2:
-            return 0.5  # Neutral sentiment
-        
-        last_change = (bars['close'].iloc[-1] - bars['close'].iloc[-2]) / bars['close'].iloc[-2]
-        if abs(last_change) > 0.03:
-            return 1.0 if last_change > 0 else 0.0  # Strong sentiment
-        return 0.5 + random.uniform(-0.2, 0.2)  # Random noise
+SMA_FAST = 12
+SMA_SLOW = 24
 
-    def technical_analysis(self, bars):
-        """Multi-indicator consensus system"""
-        if len(bars) < 20:
-            return 0.5  # Neutral if insufficient data
-            
-        rsi = RSIIndicator(bars['close']).rsi().iloc[-1]
-        macd = MACD(bars['close']).macd_diff().iloc[-1]
-        
-        # Consensus scoring system
-        rsi_score = 1 if rsi < 35 else 0 if rsi > 65 else 0.5
-        macd_score = 1 if macd > 0 else 0
-        return (rsi_score + macd_score) / 2
+@st.cache_resource
+def get_api():
+    return REST(API_KEY, SECRET_KEY, BASE_URL)
 
-    def risk_managed_order(self, decision):
-        """Smart order execution with position management"""
-        current_price = self.get_market_data()['close'].iloc[-1]
-        account = self.api.get_account()
-        
-        if decision == "buy" and not self.current_position:
-            qty = (float(account.buying_power) * self.position_size) / current_price
-            self.api.submit_order(
-                symbol=CRYPTO_SYMBOL,
-                qty=round(qty, 6),
-                side='buy',
-                type='market',
-                time_in_force='gtc'
-            )
-            self.current_position = current_price
-            return f"Bought {round(qty, 4)} {CRYPTO_SYMBOL}"
-            
-        elif decision == "sell" and self.current_position:
-            positions = self.api.list_positions()
-            for pos in positions:
-                if pos.symbol == CRYPTO_SYMBOL.replace('/', ''):
-                    self.api.submit_order(
-                        symbol=CRYPTO_SYMBOL,
-                        qty=pos.qty,
-                        side='sell',
-                        type='market',
-                        time_in_force='gtc'
-                    )
-                    profit = (current_price - self.current_position) * float(pos.qty)
-                    self.learn_from_trade(profit)
-                    self.current_position = None
-                    return f"Sold {pos.qty} {CRYPTO_SYMBOL} | Profit: ${profit:.2f}"
-        return "No action taken"
+def get_bars(symbol=SYMBOL):
+    api = get_api()
+    bars = api.get_crypto_bars(symbol, TimeFrame.Minute, limit=100).df
+    bars = bars[bars.exchange == 'CBSE']  # Use Coinbase data only
+    bars = bars.copy()
+    bars['sma_fast'] = bars['close'].rolling(SMA_FAST).mean()
+    bars['sma_slow'] = bars['close'].rolling(SMA_SLOW).mean()
+    return bars
 
-    def learn_from_trade(self, profit):
-        """Reinforcement learning from trade outcomes"""
-        memory_entry = {
-            'timestamp': pd.Timestamp.now(),
-            'profit': profit,
-            'position_size': self.position_size,
-            'market_conditions': self.analyze_market_context()
-        }
-        self.learning_memory.append(memory_entry)
-        
-        # Adaptive risk management
-        if profit > 0:
-            self.position_size = min(0.05, self.position_size * 1.1)
+def get_position(symbol=SYMBOL):
+    api = get_api()
+    positions = api.list_positions()
+    for p in positions:
+        if p.symbol == symbol:
+            return float(p.qty)
+    return 0
+
+def submit_order(side, qty=QTY_PER_TRADE, symbol=SYMBOL):
+    api = get_api()
+    try:
+        api.submit_order(symbol=symbol, qty=qty, side=side, type='market', time_in_force='gtc')
+        st.success(f"Order submitted: {side.upper()} {qty} {symbol}")
+    except Exception as e:
+        st.error(f"Order error: {e}")
+
+def plot_chart(bars):
+    fig = go.Figure(data=[go.Candlestick(
+        x=bars.index,
+        open=bars['open'],
+        high=bars['high'],
+        low=bars['low'],
+        close=bars['close'],
+        name='Candles'
+    )])
+    fig.add_trace(go.Scatter(
+        x=bars.index, y=bars["sma_fast"], line=dict(color='green', width=1), name=f"SMA{SMA_FAST}"
+    ))
+    fig.add_trace(go.Scatter(
+        x=bars.index, y=bars["sma_slow"], line=dict(color='red', width=1), name=f"SMA{SMA_SLOW}"
+    ))
+    st.plotly_chart(fig, use_container_width=True)
+
+st.title("📈 Alpaca Crypto Paper Trading Bot (BTCUSD, CBSE)")
+bars = get_bars()
+if not bars.empty:
+    plot_chart(bars)
+    st.write(bars.tail(10))
+else:
+    st.error("No market data available. Check symbol or API limits.")
+
+position = get_position()
+st.write(f"Current BTCUSD position: {position}")
+
+if st.button("Run Bot Step"):
+    if len(bars) < SMA_SLOW + 1:
+        st.warning("Not enough data for moving averages.")
+    else:
+        should_buy = bars['sma_fast'].iloc[-1] > bars['sma_slow'].iloc[-1]
+        should_sell = bars['sma_fast'].iloc[-1] < bars['sma_slow'].iloc[-1]
+        if position == 0 and should_buy:
+            submit_order('buy')
+        elif position > 0 and should_sell:
+            submit_order('sell', qty=position)
         else:
-            self.position_size = max(0.005, self.position_size * 0.9)
+            st.info("No trade signal.")
 
-    def analyze_market_context(self):
-        """Feature engineering for learning system"""
-        bars = self.get_market_data()
-        if len(bars) < 10:
-            return {}
-            
-        return {
-            'volatility': bars['close'].pct_change().std(),
-            'trend_strength': (bars['close'].iloc[-1] - bars['close'].iloc[-10]) / bars['close'].iloc[-10],
-            'volume_ratio': bars['volume'].iloc[-1] / bars['volume'].mean()
-        }
+if st.button("Force Sell All"):
+    if position > 0:
+        submit_order('sell', qty=position)
+    else:
+        st.info("No position to sell.")
 
-    def make_decision(self):
-        """Core decision-making logic"""
-        bars = self.get_market_data()
-        if bars.empty:
-            return "hold"
-            
-        news_score = self.generate_synthetic_news()
-        tech_score = self.technical_analysis(bars)
-        
-        # Consensus decision matrix
-        if news_score > 0.7 and tech_score > 0.7:
-            return "buy"
-        elif news_score < 0.3 and tech_score < 0.3:
-            return "sell"
-        return "hold"
-
-# ===== STREAMLIT INTERFACE =====
-st.title("🔐 Advanced Crypto Trading System (Paper Trading)")
-st.caption(f"Connected to Alpaca: {CRYPTO_SYMBOL}")
-
-if 'trading_system' not in st.session_state:
-    st
+# Account info
+api = get_api()
+account = api.get_account()
+st.write(f"Equity: ${account.equity}")
+st.write(f"Buying Power: ${account.buying_power}")
 

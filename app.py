@@ -1,16 +1,11 @@
-Sure! Below is the complete `app.py` code for your Streamlit application, incorporating all the necessary changes to handle the "Not Found" errors when fetching historical data for cryptocurrency tickers. This code includes improvements to filter out non-tradable assets and to make sure you're only dealing with assets that have available historical data.
-
-### Complete `app.py` Code
-
-```python
 import streamlit as st
 import pandas as pd
 import numpy as np
 from alpaca_trade_api.rest import REST, TimeFrame
 
 # ========== CONFIGURATION ==========
-API_KEY = 'PKHSYF5XH92B8VFNAJFD'  
-SECRET_KEY = '89KOB1vOSn2c3HeGorQe6zkKa0F4tFgBjbIAisCf' 
+API_KEY = 'PKHSYF5XH92B8VFNAJFD'  # Replace with your Alpaca API key
+SECRET_KEY = '89KOB1vOSn2c3HeGorQe6zkKa0F4tFgBjbIAisCf'  # Replace with your Alpaca secret key
 BASE_URL = 'https://paper-api.alpaca.markets'
 LOOKBACK = 21  # Number of minutes for RSI calculation
 RSI_BUY = 30   # RSI buy threshold
@@ -102,16 +97,3 @@ for symbol in crypto_tickers:
     #     api.submit_order(symbol=symbol, qty=CRYPTO_QTY, side='sell', type='market', time_in_force='gtc')
 
 st.info("Simulating trades with small account size. Adjust quantities and risk settings accordingly for real trading. To go fully auto, uncomment the 'submit_order' lines.")
-```
-
-### Key Changes
-1. **Asset Filtering**: The `fetch_supported_crypto_tickers` function ensures it only fetches tradeable cryptocurrencies directly from the cryptocurrency exchange.
-2. **Data Availability Check**: In the ticker iteration loop, we check if historical data exists before trying to generate trading signals, preventing unnecessary errors.
-3. **Warning Messages**: Appropriate warning and success messages notify users when no tradable assets or available historical data is present.
-
-### Next Steps
-- **Run the App**: Deploy this updated code and observe how it operates with the filtered crypto tickers.
-- **Review Permissions**: Ensure that your Alpaca account has cryptocurrency trading permissions active and check the available assets on your account.
-- **Testing Live Trading**: Once you confirm that the app works as expected, you can uncomment the trading logic at the end to enable live trading.
-
-If you encounter more issues or have additional questions, please feel free to reach out for further guidance!

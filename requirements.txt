@@ -1,8 +1,7 @@
-alpaca-trade-api
-streamlit
-pandas
-numpy
-plotly
-requests  # For making HTTP requests (can be useful for external API calls)
-gspread  # For Google Sheets integration (if using it for logging or trading data)
-oauth2client  # For Google Sheets authentication (optional if needed)
+alpaca-trade-api==2.0.0
+streamlit==1.13.0
+pandas==1.4.2
+numpy==1.22.4
+plotly==5.5.0
+requests==2.27.1
+

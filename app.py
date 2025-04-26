@@ -1,7 +1,6 @@
 import streamlit as st
-from alpaca_trade_api.rest import REST, TimeFrame
 import pandas as pd
-import numpy as np
+from alpaca_trade_api.rest import REST, TimeFrame
 
 # ========== CONFIGURATION ==========
 
@@ -9,27 +8,28 @@ API_KEY = 'PKHSYF5XH92B8VFNAJFD'
 SECRET_KEY = '89KOB1vOSn2c3HeGorQe6zkKa0F4tFgBjbIAisCf'
 BASE_URL = 'https://paper-api.alpaca.markets'
 
-# List of supported crypto tickers for Alpaca
-CRYPTO_TICKERS = [
-    "BTCUSD", "ETHUSD", "SOLUSD", "DOGEUSD", "SHIBUSD", "AVAXUSD", "ADAUSD", "MATICUSD",
-    "XRPUSD", "LINKUSD", "OPUSD", "PEPEUSD", "WIFUSD", "ARBUSD", "SEIUSD", "TONUSD",
-    "BNBUSD", "RNDRUSD", "INJUSD", "TIAUSD"
-]
-
-LOOKBACK = 21  # Minutes for RSI and volume calc
-RSI_BUY = 30   # RSI buy threshold (oversold)
-RSI_SELL = 70  # RSI sell threshold (overbought)
-VOL_SPIKE = 2  # x avg volume spike
-
-# Use small size for $500 simulation (e.g., $20-25 per trade)
-CRYPTO_QTY = 0.002  # e.g., 0.002 BTC ≈ $15-20
+LOOKBACK = 21  # Number of minutes for RSI and volume calculations
+RSI_BUY = 20   # RSI buy threshold
+RSI_SELL = 80  # RSI sell threshold
+VOL_SPIKE = 2   # Volume spike threshold
+STOCK_QTY = 1   # Stock quantity for trading
 
 # ========== INIT ==========
 
 api = REST(API_KEY, SECRET_KEY, BASE_URL)
 
 st.set_page_config(page_title="Sentinex Sniper", layout="wide")
-st.title("🤖 Sentinex Sniper Bot — Crypto Only (High Potential Profits)")
+st.title("🤖 Sentinex Sniper Bot — Only A+ Trades! (Crypto Mode)")
+
+# Fetch supported crypto tickers
+def fetch_supported_crypto():
+    try:
+        assets = api.list_assets()
+        crypto_assets = [asset.symbol for asset in assets if asset.asset_class == 'crypto']
+        return crypto_assets
+    except Exception as e:
+        st.error(f"Error fetching assets: {e}")
+        return []
 
 # Calculate RSI
 def calculate_rsi(prices, window=14):
@@ -39,7 +39,7 @@ def calculate_rsi(prices, window=14):
     rs = gain / loss
     return 100 - (100 / (1 + rs))
 
-# Get the historical data for a symbol
+# Get data for a symbol
 def get_data(symbol, tf=TimeFrame.Minute, limit=LOOKBACK):
     try:
         bars = api.get_bars(symbol, tf, limit=limit).df
@@ -48,21 +48,22 @@ def get_data(symbol, tf=TimeFrame.Minute, limit=LOOKBACK):
         st.error(f"Error fetching data for {symbol}: {e}")
         return None
 
-# Confluence Signal for buy/sell
+# Confluence signal logic for buy/sell decision
 def confluence_signal(bars):
+    if bars is None or len(bars) < LOOKBACK:
+        return None
     bars["rsi"] = calculate_rsi(bars["close"])
     bars["avg_vol"] = bars["volume"].rolling(LOOKBACK).mean()
     last = bars.iloc[-1]
-    prev_high = bars["high"].max()
+    
+    # Check if data contains expected columns
+    if "symbol" not in last or "rsi" not in last or "volume" not in last:
+        st.warning("Missing necessary columns in the data.")
+        return None
 
-    # Buy condition: RSI below 30 (oversold), volume spike, price breaking above previous high
-    if (
-        last["rsi"] < RSI_BUY and
-        last["volume"] > VOL_SPIKE * last["avg_vol"] and
-        last["close"] > prev_high * 1.01  # Price breaks past previous high
-    ):
+    prev_high = bars["high"].max()
+    if last["rsi"] < RSI_BUY and last["volume"] > VOL_SPIKE * last["avg_vol"] and last["close"] > prev_high * 0.99:
         return "BUY"
-    # Sell condition: RSI above 70 (overbought)
     elif last["rsi"] > RSI_SELL:
         return "SELL"
     else:
@@ -70,27 +71,27 @@ def confluence_signal(bars):
 
 # ========== MAIN LOGIC ==========
 
-st.header("🔎 Scanning for A+ setups in Crypto...")
+# Fetch supported cryptos
+crypto_tickers = fetch_supported_crypto()
 
-for symbol in CRYPTO_TICKERS:
+# Check and display available tickers
+st.write(f"Found {len(crypto_tickers)} supported crypto tickers.")
+st.write(f"Crypto Tickers: {crypto_tickers}")
+
+# Scan for A+ setups
+for symbol in crypto_tickers:
     bars = get_data(symbol)
     if bars is None or len(bars) < LOOKBACK:
-        st.write(f"{symbol}: No data or error fetching data.")
+        st.write(f"{symbol}: No data.")
         continue
-
-    # Analyze the data for buy/sell signals
     signal = confluence_signal(bars)
     st.write(f"{symbol}: {signal or 'No trade'}")
 
-    # For real trading, uncomment the submit order lines below
-    if signal == "BUY":
-        st.write(f"📈 {symbol} - Buying signal detected. Executing buy order...")
-        # Uncomment below for real auto trading
-        # api.submit_order(symbol=symbol, qty=CRYPTO_QTY, side='buy', type='market', time_in_force='gtc')
-    elif signal == "SELL":
-        st.write(f"📉 {symbol} - Selling signal detected. Executing sell order...")
-        # Uncomment below for real auto trading
-        # api.submit_order(symbol=symbol, qty=CRYPTO_QTY, side='sell', type='market', time_in_force='gtc')
+    # Uncomment below for auto trading (be careful with real $)
+    # if signal == "BUY":
+    #     api.submit_order(symbol=symbol, qty=STOCK_QTY, side='buy', type='market', time_in_force='gtc')
+    # elif signal == "SELL":
+    #     api.submit_order(symbol=symbol, qty=STOCK_QTY, side='sell', type='market', time_in_force='gtc')
 
-# Simulation info
-st.info("Simulating trades with a small account size. Adjust quantities and risk settings accordingly for real trading. To go fully auto, uncomment the 'submit_order' lines.")
+st.info("Simulating trades with small account size. Adjust quantities and risk settings accordingly for real trading. To go fully auto, uncomment the 'submit_order' lines.")
+

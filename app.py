@@ -7,7 +7,7 @@ import time
 # ========== CONFIGURATION ==========
 API_KEY = 'PKHSYF5XH92B8VFNAJFD'
 SECRET_KEY = '89KOB1vOSn2c3HeGorQe6zkKa0F4tFgBjbIAisCf'
-BASE_URL = 'https://paper-api.alpaca.markets'  # Make sure the endpoint is correct for your account
+BASE_URL = 'https://paper-api.alpaca.markets'
 
 # Expanded crypto list (update as you like)
 CRYPTO_TICKERS = [
@@ -43,6 +43,7 @@ def get_data(symbol, tf=TimeFrame.Minute, limit=LOOKBACK):
     try:
         bars = api.get_bars(symbol, tf, limit=limit).df
         if bars.empty:
+            st.error(f"Data is empty for {symbol}. Skipping.")
             return None
         return bars
     except Exception as e:
@@ -69,7 +70,16 @@ def confluence_signal(bars):
 # ========== MAIN LOGIC ==========
 st.header("🔎 Scanning for A+ setups in Crypto...")
 
-# Check if symbols are fetching correctly
+# Test with just one symbol first (e.g., BTCUSD)
+test_symbol = "BTCUSD"
+bars = get_data(test_symbol)
+if bars is not None and len(bars) >= LOOKBACK:
+    signal = confluence_signal(bars)
+    st.write(f"{test_symbol}: {signal or 'No trade'}")
+else:
+    st.write(f"{test_symbol}: No data or error fetching data.")
+
+# Now loop through the full list if test symbol works
 for symbol in CRYPTO_TICKERS:
     bars = get_data(symbol)
     if bars is None or len(bars) < LOOKBACK:
@@ -84,6 +94,7 @@ for symbol in CRYPTO_TICKERS:
     #     api.submit_order(symbol=symbol, qty=CRYPTO_QTY, side='sell', type='market', time_in_force='gtc')
 
 st.info("Simulating trades with small account size, adjust accordingly for real trading. \nTo go fully auto, uncomment the 'submit_order' lines.")
+
 
 
 

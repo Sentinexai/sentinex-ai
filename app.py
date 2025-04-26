@@ -2,11 +2,12 @@ import streamlit as st
 from alpaca_trade_api.rest import REST, TimeFrame
 import pandas as pd
 import numpy as np
+import time
 
 # ========== CONFIGURATION ==========
 API_KEY = 'PKHSYF5XH92B8VFNAJFD'
 SECRET_KEY = '89KOB1vOSn2c3HeGorQe6zkKa0F4tFgBjbIAisCf'
-BASE_URL = 'https://paper-api.alpaca.markets'
+BASE_URL = 'https://paper-api.alpaca.markets'  # Make sure the endpoint is correct for your account
 
 # Expanded crypto list (update as you like)
 CRYPTO_TICKERS = [
@@ -15,7 +16,7 @@ CRYPTO_TICKERS = [
     "BNBUSD", "RNDRUSD", "INJUSD", "TIAUSD"
 ]
 
-LOOKBACK = 21  # Minutes for RSI and volume calc
+LOOKBACK = 21  # Minutes for RSI and volume calculation
 RSI_BUY = 20   # RSI buy threshold
 RSI_SELL = 80  # RSI sell threshold
 VOL_SPIKE = 2  # x avg volume spike
@@ -41,6 +42,8 @@ def calculate_rsi(prices, window=14):
 def get_data(symbol, tf=TimeFrame.Minute, limit=LOOKBACK):
     try:
         bars = api.get_bars(symbol, tf, limit=limit).df
+        if bars.empty:
+            return None
         return bars
     except Exception as e:
         st.error(f"Error fetching data for {symbol}: {str(e)}")
@@ -66,6 +69,7 @@ def confluence_signal(bars):
 # ========== MAIN LOGIC ==========
 st.header("🔎 Scanning for A+ setups in Crypto...")
 
+# Check if symbols are fetching correctly
 for symbol in CRYPTO_TICKERS:
     bars = get_data(symbol)
     if bars is None or len(bars) < LOOKBACK:
@@ -80,6 +84,7 @@ for symbol in CRYPTO_TICKERS:
     #     api.submit_order(symbol=symbol, qty=CRYPTO_QTY, side='sell', type='market', time_in_force='gtc')
 
 st.info("Simulating trades with small account size, adjust accordingly for real trading. \nTo go fully auto, uncomment the 'submit_order' lines.")
+
 
 
 

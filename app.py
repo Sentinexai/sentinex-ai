@@ -1,34 +1,22 @@
+# Import necessary libraries
 import streamlit as st
-from alpaca_trade_api.rest import REST, TimeFrame
 import pandas as pd
 import numpy as np
-import requests
-import logging
-
-# Setting up basic logging
-logging.basicConfig(level=logging.INFO)
+from alpaca_trade_api.rest import REST, TimeFrame
 
 # ========== CONFIGURATION ==========
 API_KEY = 'PKHSYF5XH92B8VFNAJFD'
 SECRET_KEY = '89KOB1vOSn2c3HeGorQe6zkKa0F4tFgBjbIAisCf'
 BASE_URL = 'https://paper-api.alpaca.markets'
+LOOKBACK = 21  # Number of minutes for RSI calculation
+RSI_BUY = 30   # RSI buy threshold
+RSI_SELL = 70  # RSI sell threshold
+CRYPTO_QTY = 0.002  # Quantity for trading
 
-# List of crypto tickers (modify as needed)
-CRYPTO_TICKERS = [
-    "BTCUSD", "ETHUSD", "SOLUSD", "DOGEUSD", "SHIBUSD", "AVAXUSD", "ADAUSD", "MATICUSD",
-    "XRPUSD", "LINKUSD", "PEPEUSD", "WIFUSD", "ARBUSD", "SEIUSD", "TONUSD",
-    "BNBUSD", "RNDRUSD", "INJUSD", "TIAUSD"
-]
-
-LOOKBACK = 21  # Minutes for RSI and volume calculation
-RSI_BUY = 20   # RSI buy threshold
-RSI_SELL = 80  # RSI sell threshold
-VOL_SPIKE = 2  # x avg volume spike
-CRYPTO_QTY = 0.002  # Example: 0.002 BTC ≈ $15-20 per trade
-
-# ========== INIT ==========
+# Initialize Alpaca API
 api = REST(API_KEY, SECRET_KEY, BASE_URL)
 
+# Set up the Streamlit layout
 st.set_page_config(page_title="Sentinex Sniper", layout="wide")
 st.title("🤖 Sentinex Sniper Bot — Only A+ Trades! (Crypto Mode)")
 
@@ -41,73 +29,66 @@ def calculate_rsi(prices, window=14):
     rs = gain / loss
     return 100 - (100 / (1 + rs))
 
-def add_rsi(bars):
-    """Calculate RSI and add it to the bars DataFrame."""
-    bars['rsi'] = calculate_rsi(bars['close'])
-    return bars
-
-def get_data(symbol, tf=TimeFrame.Minute, limit=LOOKBACK):
-    """Fetch historical price data for the given symbol"""
+def fetch_supported_crypto_tickers():
+    """Fetch supported crypto tickers."""
     try:
-        bars = api.get_bars(symbol, tf, limit=limit).df
+        assets = api.list_assets()
+        crypto_tickers = [asset.symbol for asset in assets if asset.crypto and asset.tradable]
+        
+        if not crypto_tickers:
+            st.warning("No supported crypto tickers found.")
+        else:
+            st.success(f"Supported crypto tickers: {crypto_tickers}")  # Display the fetched tickers
+        
+        return crypto_tickers
+    except Exception as e:
+        st.error(f"Error fetching assets: {e}")
+        return []
+
+def get_data(symbol):
+    """Fetch historical price data for the given symbol."""
+    try:
+        # Fetch historical bars for the specified symbol
+        bars = api.get_bars(symbol, TimeFrame.Minute, limit=LOOKBACK).df
+        
+        # Check if data is empty
+        if bars.empty:
+            st.warning(f"No historical data available for {symbol}.")
+        
         return bars
     except Exception as e:
-        logging.error(f"Error fetching data for {symbol}: {e}")
+        st.error(f"Error fetching data for {symbol}: {e}")  # Display error
         return None
 
-def get_sentiment(symbol):
-    """Fetch sentiment data for the given symbol from an external API"""
-    sentiment_url = f"https://api.sentimentapi.com/{symbol}"
-    try:
-        response = requests.get(sentiment_url)
-        sentiment_score = response.json().get('score', 0)  # Adjust as necessary
-        return sentiment_score
-    except Exception as e:
-        logging.error(f"Error fetching sentiment for {symbol}: {e}")
-        return 0
-
-def confluence_signal(bars, symbol):
-    """Generate a buy/sell signal based on RSI, volume spike, and sentiment"""
-    if 'symbol' not in bars.columns:
-        logging.error(f"Missing symbol column for {symbol}")
+def confluence_signal(bars):
+    """Generate buy/sell signals based on RSI."""
+    if bars is None or len(bars) < LOOKBACK:
         return None
 
-    bars["avg_vol"] = bars["volume"].rolling(LOOKBACK).mean()
-
+    bars['rsi'] = calculate_rsi(bars['close'])
     last = bars.iloc[-1]
-    prev_high = bars["high"].max()
 
-    # Get sentiment score using the symbol
-    sentiment_score = get_sentiment(symbol)
-
-    if (
-        last["rsi"] < RSI_BUY and
-        last["volume"] > VOL_SPIKE * last["avg_vol"] and
-        last["close"] > prev_high * 0.99
-    ):
+    # Buy/Sell logic
+    if last['rsi'] < RSI_BUY:
         return "BUY"
-    elif last["rsi"] > RSI_SELL:
+    elif last['rsi'] > RSI_SELL:
         return "SELL"
     else:
-        return None
+        return "HOLD"
 
 # ========== MAIN LOGIC ==========
 st.header("🔎 Scanning for A+ setups in Crypto...")
 
-for symbol in CRYPTO_TICKERS:
-    bars = get_data(symbol)
-    if bars is None or len(bars) < LOOKBACK:
-        st.write(f"{symbol}: No data.")
-        continue
-    
-    # Calculate RSI
-    bars = add_rsi(bars)
-    bars.dropna(inplace=True)  # Ensure no NaN values
+# Fetch crypto tickers
+crypto_tickers = fetch_supported_crypto_tickers()
 
-    signal = confluence_signal(bars, symbol)
+# Iterate over the supported crypto tickers
+for symbol in crypto_tickers:
+    bars = get_data(symbol)
+    signal = confluence_signal(bars)
     st.write(f"{symbol}: {signal or 'No trade'}")
-    
-    # Uncomment below for auto trading (be careful with real $)
+
+    # Uncomment the following lines for live trading
     # if signal == "BUY":
     #     api.submit_order(symbol=symbol, qty=CRYPTO_QTY, side='buy', type='market', time_in_force='gtc')
     # elif signal == "SELL":

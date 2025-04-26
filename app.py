@@ -37,6 +37,9 @@ def calculate_rsi(prices, window=14):
 def get_data(symbol, tf=TimeFrame.Minute, limit=LOOKBACK):
     try:
         bars = api.get_bars(symbol, tf, limit=limit).df
+        if bars.empty:
+            st.write(f"Data for {symbol} is empty.")
+            return None
         return bars
     except Exception as e:
         st.write(f"Error fetching data for {symbol}: {e}")
@@ -63,7 +66,7 @@ def confluence_signal(bars):
 def fetch_supported_crypto():
     try:
         assets = api.list_assets()
-        crypto_assets = [asset.symbol for asset in assets if asset.tradable and 'USD' in asset.symbol]
+        crypto_assets = [asset.symbol for asset in assets if 'USD' in asset.symbol and asset.tradable]
         return crypto_assets
     except Exception as e:
         st.write(f"Error fetching assets: {e}")
@@ -91,6 +94,4 @@ for symbol in crypto_tickers:
     #     api.submit_order(symbol=symbol, qty=CRYPTO_QTY, side='sell', type='market', time_in_force='gtc')
 
 st.info("Simulating trades with small account size, adjust accordingly for real trading. To go fully auto, uncomment the 'submit_order' lines.")
-
-
 

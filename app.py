@@ -2,9 +2,9 @@ import streamlit as st
 from alpaca_trade_api.rest import REST, TimeFrame
 import pandas as pd
 import numpy as np
+import requests
 
 # ========== CONFIGURATION ==========
-
 API_KEY = 'PKHSYF5XH92B8VFNAJFD'
 SECRET_KEY = '89KOB1vOSn2c3HeGorQe6zkKa0F4tFgBjbIAisCf'
 BASE_URL = 'https://paper-api.alpaca.markets'
@@ -42,12 +42,9 @@ def calculate_rsi(prices, window=14):
 def get_data(symbol, tf=TimeFrame.Minute, limit=LOOKBACK):
     try:
         bars = api.get_bars(symbol, tf, limit=limit).df
-        if bars.empty:
-            st.write(f"{symbol}: Data is empty, skipping...")
-            return None
         return bars
     except Exception as e:
-        st.write(f"{symbol}: Error fetching data - {str(e)}")
+        st.error(f"Error fetching data for {symbol}: {str(e)}")
         return None
 
 # Confluence Signal for buy/sell
@@ -68,8 +65,7 @@ def confluence_signal(bars):
         return None
 
 # ========== MAIN LOGIC ==========
-
-st.header("💎 Crypto Mode (A+ signals)")
+st.header("🔎 Scanning for A+ setups in Crypto...")
 
 for symbol in CRYPTO_TICKERS:
     bars = get_data(symbol)
@@ -85,7 +81,6 @@ for symbol in CRYPTO_TICKERS:
     #     api.submit_order(symbol=symbol, qty=CRYPTO_QTY, side='sell', type='market', time_in_force='gtc')
 
 st.info("Simulating trades with small account size, adjust accordingly for real trading. \nTo go fully auto, uncomment the 'submit_order' lines.")
-
 
 
 

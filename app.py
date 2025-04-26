@@ -2,7 +2,6 @@ import streamlit as st
 from alpaca_trade_api.rest import REST, TimeFrame
 import pandas as pd
 import numpy as np
-import time
 
 # ========== CONFIGURATION ==========
 API_KEY = 'PKHSYF5XH92B8VFNAJFD'
@@ -56,7 +55,7 @@ def confluence_signal(bars):
 def fetch_supported_crypto():
     try:
         assets = api.list_assets()
-        crypto_assets = [asset.symbol for asset in assets if asset.type == 'crypto']
+        crypto_assets = [asset.symbol for asset in assets if asset.asset_class == 'crypto']
         return crypto_assets
     except Exception as e:
         st.error(f"Error fetching assets: {str(e)}")
@@ -84,8 +83,6 @@ for symbol in crypto_tickers:
     #     api.submit_order(symbol=symbol, qty=0.002, side='sell', type='market', time_in_force='gtc')
 
 st.info("Simulating trades with small account size. Adjust accordingly for real trading. \nTo go fully auto, uncomment the 'submit_order' lines.")
-
-
 
 
 

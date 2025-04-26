@@ -4,7 +4,7 @@ import numpy as np
 from alpaca_trade_api.rest import REST, TimeFrame
 
 # ========== CONFIGURATION ==========
-API_KEY = 'PKHSYF5XH92B8VFNAJFD'
+API_KEY = 'PKHSYF5XH92B8VFNAJFD' 
 SECRET_KEY = '89KOB1vOSn2c3HeGorQe6zkKa0F4tFgBjbIAisCf'  
 BASE_URL = 'https://paper-api.alpaca.markets'
 LOOKBACK = 21  # Number of minutes for RSI calculation
@@ -32,8 +32,14 @@ def fetch_supported_crypto_tickers():
     """Fetch supported crypto tickers."""
     try:
         assets = api.list_assets()
-        # Filter only tradable crypto assets by confirming tradability and the presence of 'crypto' in the symbol
-        crypto_tickers = [asset.symbol for asset in assets if asset.tradable and asset.exchange and 'crypto' in asset.symbol.lower()]
+        
+        # Print the attributes for each asset for debugging
+        for asset in assets:
+            # You can remove this line after debugging
+            st.write(f"Asset: {asset.symbol}, Tradable: {asset.tradable}, Exchange: {asset.exchange}")
+        
+        # Filter for tradable crypto assets (adjusted for actual attributes available)
+        crypto_tickers = [asset.symbol for asset in assets if asset.tradable and (asset.exchange and 'crypto' in asset.symbol.lower())]
 
         if not crypto_tickers:
             st.warning("No supported crypto tickers found.")
@@ -91,4 +97,4 @@ for symbol in crypto_tickers:
     # elif signal == "SELL":
     #     api.submit_order(symbol=symbol, qty=CRYPTO_QTY, side='sell', type='market', time_in_force='gtc')
 
-st.info("Simulating trades with small account size. Adjust quantities and risk settings accordingly for real trading.")
+st.info("Simulating trades with small account size. Adjust quantities and risk settings accordingly for real trading. To go fully auto, uncomment the 'submit_order' lines.")

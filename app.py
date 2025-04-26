@@ -62,7 +62,7 @@ def confluence_signal(bars):
     else:
         return None
 
-# Fetch supported crypto tickers
+# Fetch supported crypto tickers from Alpaca
 def fetch_supported_crypto():
     try:
         assets = api.list_assets()
@@ -94,4 +94,5 @@ for symbol in crypto_tickers:
     #     api.submit_order(symbol=symbol, qty=CRYPTO_QTY, side='sell', type='market', time_in_force='gtc')
 
 st.info("Simulating trades with small account size, adjust accordingly for real trading. To go fully auto, uncomment the 'submit_order' lines.")
+
 

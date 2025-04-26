@@ -1,11 +1,10 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 from alpaca_trade_api.rest import REST, TimeFrame, APIError
 
 # ========== CONFIGURATION ==========
-API_KEY = 'PKHSYF5XH92B8VFNAJFD'  
-SECRET_KEY = '89KOB1vOSn2c3HeGorQe6zkKa0F4tFgBjbIAisCf'  
+API_KEY = 'PKHSYF5XH92B8VFNAJFD'  # Replace with your Alpaca API key
+SECRET_KEY = '89KOB1vOSn2c3HeGorQe6zkKa0F4tFgBjbIAisCf'  # Replace with your Alpaca secret key
 BASE_URL = 'https://paper-api.alpaca.markets'
 LOOKBACK = 21  # Number of minutes for RSI calculation
 RSI_BUY = 30   # RSI buy threshold
@@ -33,41 +32,41 @@ def fetch_supported_crypto_tickers():
     try:
         assets = api.list_assets()
         
-        # Filter for tradable crypto assets, excluding OTC
+        # Filter for tradable crypto assets
         crypto_tickers = [
             asset.symbol 
             for asset in assets 
-            if asset.tradable and asset.exchange == 'CRYPTO' and asset.symbol.count('/') > 0
+            if asset.tradable and asset.exchange == 'CRYPTO'
         ] 
         
         if not crypto_tickers:
             st.warning("No available cryptocurrency tickers found.")
         else:
-            st.success(f"Supported available cryptocurrency tickers: {crypto_tickers}")
-        
+            st.success(f"Supported cryptocurrency tickers: {crypto_tickers}")
+
         return crypto_tickers
     except Exception as e:
         st.error(f"Error fetching assets: {e}")
         return []
 
 def get_data(symbol):
-    """Fetch historical price data for the given symbol."""
+    """Fetch historical price data for a symbol."""
     try:
-        # Take only the base asset for the historical data request
-        base_asset = symbol.split('/')[0]  # Get the base asset ticker
-
-        # Fetch historical bars for the specified symbol using TimeFrame
+        # Attempt to fetch with only the base asset (e.g., SOL instead of SOL/USDT)
+        base_asset = symbol.split('/')[0]
+        
+        # Try fetching historical bars for the provided ticker symbol
         bars = api.get_bars(base_asset, TimeFrame.Minute, limit=LOOKBACK).df
         
         if bars.empty:
-            st.warning(f"No historical data available for {symbol}.")
+            st.warning(f"No historical data available for {base_asset}.")
         
         return bars
     except APIError as e:
         st.error(f"Error fetching data for {symbol}: {e}")
         return None
     except Exception as e:
-        st.error(f"An unexpected error occurred: {e}")
+        st.error(f"An unexpected error occurred, symbol: {symbol}: {e}")
         return None
 
 def confluence_signal(bars):

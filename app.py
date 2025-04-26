@@ -49,14 +49,10 @@ def fetch_supported_crypto_tickers():
 def get_data(symbol):
     """Fetch historical price data for the given symbol."""
     try:
-        # Remove the paired currency suffix and fetch historical data.
-        # The API might require the base asset only. You can decide
-        # to fetch either the base asset or handle traded pairs based on your logic.
-        if '/' in symbol:
-            base_asset = symbol.split('/')[0]
-        else:
-            base_asset = symbol
-            
+        # Use only the base asset for fetching data
+        base_asset = symbol.split('/')[0]  # Get the base asset ticker
+
+        # Fetch historical bars for the specified symbol using TimeFrame
         bars = api.get_bars(base_asset, TimeFrame.Minute, limit=LOOKBACK).df
         
         if bars.empty:

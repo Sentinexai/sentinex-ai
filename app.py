@@ -9,21 +9,6 @@ API_KEY = 'PKHSYF5XH92B8VFNAJFD'
 SECRET_KEY = '89KOB1vOSn2c3HeGorQe6zkKa0F4tFgBjbIAisCf'
 BASE_URL = 'https://paper-api.alpaca.markets'
 
-# Expanded crypto list (update as you like)
-CRYPTO_TICKERS = [
-    "BTCUSD", "ETHUSD", "SOLUSD", "DOGEUSD", "SHIBUSD", "AVAXUSD", "ADAUSD", "MATICUSD",
-    "XRPUSD", "LINKUSD", "OPUSD", "PEPEUSD", "WIFUSD", "ARBUSD", "SEIUSD", "TONUSD",
-    "BNBUSD", "RNDRUSD", "INJUSD", "TIAUSD"
-]
-
-LOOKBACK = 21  # Minutes for RSI and volume calculation
-RSI_BUY = 20   # RSI buy threshold
-RSI_SELL = 80  # RSI sell threshold
-VOL_SPIKE = 2  # x avg volume spike
-
-# Use small size for $500 simulation (e.g., $20-25 per trade)
-CRYPTO_QTY = 0.002  # e.g., 0.002 BTC ≈ $15-20
-
 # ========== INIT ==========
 api = REST(API_KEY, SECRET_KEY, BASE_URL)
 
@@ -39,7 +24,7 @@ def calculate_rsi(prices, window=14):
     return 100 - (100 / (1 + rs))
 
 # Get the historical data for a symbol
-def get_data(symbol, tf=TimeFrame.Minute, limit=LOOKBACK):
+def get_data(symbol, tf=TimeFrame.Minute, limit=21):
     try:
         bars = api.get_bars(symbol, tf, limit=limit).df
         if bars.empty:
@@ -53,47 +38,49 @@ def get_data(symbol, tf=TimeFrame.Minute, limit=LOOKBACK):
 # Confluence Signal for buy/sell
 def confluence_signal(bars):
     bars["rsi"] = calculate_rsi(bars["close"])
-    bars["avg_vol"] = bars["volume"].rolling(LOOKBACK).mean()
+    bars["avg_vol"] = bars["volume"].rolling(21).mean()
     last = bars.iloc[-1]
     prev_high = bars["high"].max()
     if (
-        last["rsi"] < RSI_BUY and
-        last["volume"] > VOL_SPIKE * last["avg_vol"] and
+        last["rsi"] < 20 and
+        last["volume"] > 2 * last["avg_vol"] and
         last["close"] > prev_high * 0.99
     ):
         return "BUY"
-    elif last["rsi"] > RSI_SELL:
+    elif last["rsi"] > 80:
         return "SELL"
     else:
         return None
 
+# Fetch available crypto assets from Alpaca
+def fetch_supported_crypto():
+    assets = api.list_assets()
+    crypto_assets = [asset.symbol for asset in assets if asset.asset_class == 'crypto']
+    return crypto_assets
+
 # ========== MAIN LOGIC ==========
 st.header("🔎 Scanning for A+ setups in Crypto...")
 
-# Test with just one symbol first (e.g., BTCUSD)
-test_symbol = "BTCUSD"
-bars = get_data(test_symbol)
-if bars is not None and len(bars) >= LOOKBACK:
-    signal = confluence_signal(bars)
-    st.write(f"{test_symbol}: {signal or 'No trade'}")
-else:
-    st.write(f"{test_symbol}: No data or error fetching data.")
+# Fetch supported crypto tickers from Alpaca
+crypto_tickers = fetch_supported_crypto()
+st.write(f"Found {len(crypto_tickers)} supported crypto tickers: {crypto_tickers}")
 
-# Now loop through the full list if test symbol works
-for symbol in CRYPTO_TICKERS:
+# Loop over available cryptos
+for symbol in crypto_tickers:
     bars = get_data(symbol)
-    if bars is None or len(bars) < LOOKBACK:
+    if bars is None or len(bars) < 21:
         st.write(f"{symbol}: No data or error fetching data.")
         continue
     signal = confluence_signal(bars)
     st.write(f"{symbol}: {signal or 'No trade'}")
     # UNCOMMENT below for auto trading (be careful with real $)
     # if signal == "BUY":
-    #     api.submit_order(symbol=symbol, qty=CRYPTO_QTY, side='buy', type='market', time_in_force='gtc')
+    #     api.submit_order(symbol=symbol, qty=0.002, side='buy', type='market', time_in_force='gtc')
     # elif signal == "SELL":
-    #     api.submit_order(symbol=symbol, qty=CRYPTO_QTY, side='sell', type='market', time_in_force='gtc')
+    #     api.submit_order(symbol=symbol, qty=0.002, side='sell', type='market', time_in_force='gtc')
 
-st.info("Simulating trades with small account size, adjust accordingly for real trading. \nTo go fully auto, uncomment the 'submit_order' lines.")
+st.info("Simulating trades with small account size. Adjust accordingly for real trading. \nTo go fully auto, uncomment the 'submit_order' lines.")
+
 
 
 

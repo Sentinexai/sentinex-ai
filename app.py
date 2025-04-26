@@ -59,11 +59,11 @@ def confluence_signal(bars):
     else:
         return None
 
-# Fetch available supported crypto tickers
+# Fetch supported crypto tickers
 def fetch_supported_crypto():
     try:
         assets = api.list_assets()
-        crypto_assets = [asset.symbol for asset in assets if asset.asset_class == 'crypto']
+        crypto_assets = [asset.symbol for asset in assets if asset.tradable and 'USD' in asset.symbol]
         return crypto_assets
     except Exception as e:
         st.write(f"Error fetching assets: {e}")
@@ -91,5 +91,6 @@ for symbol in crypto_tickers:
     #     api.submit_order(symbol=symbol, qty=CRYPTO_QTY, side='sell', type='market', time_in_force='gtc')
 
 st.info("Simulating trades with small account size, adjust accordingly for real trading. To go fully auto, uncomment the 'submit_order' lines.")
+
 
 

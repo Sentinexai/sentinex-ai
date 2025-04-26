@@ -9,7 +9,7 @@ import logging
 logging.basicConfig(level=logging.INFO)
 
 # ========== CONFIGURATION ==========
-API_KEY = ''PKHSYF5XH92B8VFNAJFD'
+API_KEY = 'PKHSYF5XH92B8VFNAJFD'
 SECRET_KEY = '89KOB1vOSn2c3HeGorQe6zkKa0F4tFgBjbIAisCf'
 BASE_URL = 'https://paper-api.alpaca.markets'
 

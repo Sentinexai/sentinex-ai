@@ -54,9 +54,13 @@ def confluence_signal(bars):
 
 # Fetch available crypto assets from Alpaca
 def fetch_supported_crypto():
-    assets = api.list_assets()
-    crypto_assets = [asset.symbol for asset in assets if asset.asset_class == 'crypto']
-    return crypto_assets
+    try:
+        assets = api.list_assets()
+        crypto_assets = [asset.symbol for asset in assets if asset.type == 'crypto']
+        return crypto_assets
+    except Exception as e:
+        st.error(f"Error fetching assets: {str(e)}")
+        return []
 
 # ========== MAIN LOGIC ==========
 st.header("🔎 Scanning for A+ setups in Crypto...")

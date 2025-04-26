@@ -37,7 +37,7 @@ def fetch_supported_crypto_tickers():
             asset.symbol 
             for asset in assets 
             if asset.tradable and asset.exchange == 'CRYPTO'
-        ] 
+        ]
         
         if not crypto_tickers:
             st.warning("No available cryptocurrency tickers found.")
@@ -54,6 +54,7 @@ def get_data(symbol):
     try:
         # Attempt to fetch with only the base asset (e.g., SOL instead of SOL/USDT)
         base_asset = symbol.split('/')[0]
+        st.write(f"Fetching data for base asset: {base_asset}")
         
         # Try fetching historical bars for the provided ticker symbol
         bars = api.get_bars(base_asset, TimeFrame.Minute, limit=LOOKBACK).df
@@ -63,10 +64,10 @@ def get_data(symbol):
         
         return bars
     except APIError as e:
-        st.error(f"Error fetching data for {symbol}: {e}")
+        st.error(f"Error fetching data for {base_asset}: {e}")
         return None
     except Exception as e:
-        st.error(f"An unexpected error occurred, symbol: {symbol}: {e}")
+        st.error(f"An unexpected error occurred while fetching data for {symbol}: {e}")
         return None
 
 def confluence_signal(bars):
@@ -92,6 +93,7 @@ crypto_tickers = fetch_supported_crypto_tickers()
 
 # Iterate over the supported crypto tickers
 for symbol in crypto_tickers:
+    st.write(f"Fetching data for {symbol}...")
     bars = get_data(symbol)
     if bars is not None:  # Only proceed if data was fetched successfully
         signal = confluence_signal(bars)

@@ -33,13 +33,17 @@ def fetch_supported_crypto_tickers():
     try:
         assets = api.list_assets()
         
-        # Filter for tradable crypto assets
-        crypto_tickers = [asset.symbol for asset in assets if asset.tradable and asset.exchange == 'CRYPTO'] 
+        # Filter for tradable crypto assets, excluding OTC assets
+        crypto_tickers = [
+            asset.symbol 
+            for asset in assets 
+            if asset.tradable and asset.exchange == 'CRYPTO'
+        ] 
         
         if not crypto_tickers:
             st.warning("No available cryptocurrency tickers found.")
         else:
-            st.success(f"Supported available cryptocurrency tickers: {crypto_tickers}")  # Display fetched tickers
+            st.success(f"Supported available cryptocurrency tickers: {crypto_tickers}")
         
         return crypto_tickers
     except Exception as e:
@@ -60,7 +64,7 @@ def get_data(symbol):
         
         return bars
     except APIError as e:
-        st.error(f"Error fetching data for {symbol}: {e}")  # Display error
+        st.error(f"Error fetching data for {symbol}: {e}")
         return None
     except Exception as e:
         st.error(f"An unexpected error occurred: {e}")

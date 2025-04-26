@@ -4,8 +4,8 @@ import numpy as np
 from alpaca_trade_api.rest import REST, TimeFrame, APIError
 
 # ========== CONFIGURATION ==========
-API_KEY = 'PKHSYF5XH92B8VFNAJFD'  # Replace with your Alpaca API key
-SECRET_KEY = '89KOB1vOSn2c3HeGorQe6zkKa0F4tFgBjbIAisCf'  # Replace with your Alpaca secret key
+API_KEY = 'PKHSYF5XH92B8VFNAJFD'  
+SECRET_KEY = '89KOB1vOSn2c3HeGorQe6zkKa0F4tFgBjbIAisCf'  
 BASE_URL = 'https://paper-api.alpaca.markets'
 LOOKBACK = 21  # Number of minutes for RSI calculation
 RSI_BUY = 30   # RSI buy threshold
@@ -33,11 +33,11 @@ def fetch_supported_crypto_tickers():
     try:
         assets = api.list_assets()
         
-        # Filter for tradable crypto assets, excluding OTC assets
+        # Filter for tradable crypto assets, excluding OTC
         crypto_tickers = [
             asset.symbol 
             for asset in assets 
-            if asset.tradable and asset.exchange == 'CRYPTO'
+            if asset.tradable and asset.exchange == 'CRYPTO' and asset.symbol.count('/') > 0
         ] 
         
         if not crypto_tickers:
@@ -53,7 +53,7 @@ def fetch_supported_crypto_tickers():
 def get_data(symbol):
     """Fetch historical price data for the given symbol."""
     try:
-        # Use only the base asset for fetching data
+        # Take only the base asset for the historical data request
         base_asset = symbol.split('/')[0]  # Get the base asset ticker
 
         # Fetch historical bars for the specified symbol using TimeFrame

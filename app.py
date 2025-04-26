@@ -4,7 +4,7 @@ import numpy as np
 from alpaca_trade_api.rest import REST, TimeFrame
 
 # ========== CONFIGURATION ==========
-API_KEY = 'PKHSYF5XH92B8VFNAJFD' 
+API_KEY = 'PKHSYF5XH92B8VFNAJFD'  
 SECRET_KEY = '89KOB1vOSn2c3HeGorQe6zkKa0F4tFgBjbIAisCf'  
 BASE_URL = 'https://paper-api.alpaca.markets'
 LOOKBACK = 21  # Number of minutes for RSI calculation
@@ -33,18 +33,13 @@ def fetch_supported_crypto_tickers():
     try:
         assets = api.list_assets()
         
-        # Print the attributes for each asset for debugging
-        for asset in assets:
-            # You can remove this line after debugging
-            st.write(f"Asset: {asset.symbol}, Tradable: {asset.tradable}, Exchange: {asset.exchange}")
-        
-        # Filter for tradable crypto assets (adjusted for actual attributes available)
-        crypto_tickers = [asset.symbol for asset in assets if asset.tradable and (asset.exchange and 'crypto' in asset.symbol.lower())]
+        # Filter for tradable crypto assets
+        crypto_tickers = [asset.symbol for asset in assets if asset.tradable and asset.exchange == 'CRYPTO']  # Ensure it's from crypto exchange
 
         if not crypto_tickers:
-            st.warning("No supported crypto tickers found.")
+            st.warning("No cryptocurrency tickers found. Please check your Alpaca account settings.")
         else:
-            st.success(f"Supported crypto tickers: {crypto_tickers}")  # Display the fetched tickers
+            st.success(f"Supported cryptocurrency tickers: {crypto_tickers}")  # Display fetched tickers
         
         return crypto_tickers
     except Exception as e:

@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-from alpaca_trade_api.rest import REST, TimeFrame
+from alpaca_trade_api.rest import REST, TimeFrame, APIError
 
 # ========== CONFIGURATION ==========
 API_KEY = 'PKHSYF5XH92B8VFNAJFD'  # Replace with your Alpaca API key
@@ -32,14 +32,13 @@ def fetch_supported_crypto_tickers():
     """Fetch supported crypto tickers."""
     try:
         assets = api.list_assets()
-        
         # Filter for tradable crypto assets
-        crypto_tickers = [asset.symbol for asset in assets if asset.tradable and asset.exchange == 'CRYPTO'] 
+        crypto_tickers = [asset.symbol for asset in assets if asset.tradable and asset.exchange == 'CRYPTO']
         
         if not crypto_tickers:
             st.warning("No available cryptocurrency tickers found.")
         else:
-            st.success(f"Supported available cryptocurrency tickers: {crypto_tickers}")  # Display fetched tickers
+            st.success(f"Supported available cryptocurrency tickers: {crypto_tickers}")
         
         return crypto_tickers
     except Exception as e:
@@ -56,8 +55,11 @@ def get_data(symbol):
             st.warning(f"No historical data available for {symbol}.")
         
         return bars
-    except Exception as e:
+    except APIError as e:
         st.error(f"Error fetching data for {symbol}: {e}")  # Display error
+        return None
+    except Exception as e:
+        st.error(f"An unexpected error occurred: {e}")
         return None
 
 def confluence_signal(bars):
@@ -89,7 +91,7 @@ for symbol in crypto_tickers:
         st.write(f"{symbol}: {signal or 'No trade'}")
     else:
         st.write(f"{symbol}: No data available.")
-    
+
     # Uncomment the following lines for live trading (after testing)
     # if signal == "BUY":
     #     api.submit_order(symbol=symbol, qty=CRYPTO_QTY, side='buy', type='market', time_in_force='gtc')

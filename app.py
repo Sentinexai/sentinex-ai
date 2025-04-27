@@ -1,55 +1,71 @@
 import streamlit as st
-from alpaca_trade_api.rest import REST, TimeFrame
 import pandas as pd
 import numpy as np
+import datetime
+from alpaca_trade_api.rest import REST, TimeFrame
 import time
+import requests
 
-# API credentials
 API_KEY = "PKHSYF5XH92B8VFNAJFD"
 SECRET_KEY = "89KOB1vOSn2c3HeGorQe6zkKa0F4tFgBjbIAisCf"
 BASE_URL = "https://paper-api.alpaca.markets"
-
 api = REST(API_KEY, SECRET_KEY, BASE_URL)
 
-st.title("🤖 Sentinex Crypto Sniper")
+# Download S&P 500 tickers live
+def get_sp500():
+    url = 'https://datahub.io/core/s-and-p-500-companies/r/constituents.csv'
+    df = pd.read_csv(url)
+    return df['Symbol'].tolist()
 
-CRYPTO_TICKERS = ["BTCUSD", "ETHUSD", "SOLUSD", "DOGEUSD", "AVAXUSD"]
+TICKERS = get_sp500()
 
-# RSI calculation function
-def calc_rsi(series, period=14):
-    delta = series.diff(1).dropna()
-    gain = delta.clip(lower=0).rolling(window=period).mean()
-    loss = -delta.clip(upper=0).rolling(window=period).mean()
+def get_rsi(prices, window=14):
+    delta = prices.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=window).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=window).mean()
     rs = gain / loss
     return 100 - (100 / (1 + rs))
 
-def get_crypto_data(symbol):
-    bars = api.get_crypto_bars(symbol, TimeFrame.Minute, limit=30).df
-    bars['rsi'] = calc_rsi(bars['close'])
-    return bars
+trade_log = []
+win = 0
+loss = 0
 
-# Automated Trading Logic
-trade_qty = {"BTCUSD": 0.001, "ETHUSD": 0.005, "SOLUSD": 0.1, "DOGEUSD": 50, "AVAXUSD": 0.2}
-
-if st.button("Run Sniper Bot 🚀"):
-    for symbol in CRYPTO_TICKERS:
-        data = get_crypto_data(symbol)
-        latest_rsi = data['rsi'].iloc[-1]
-        latest_close = data['close'].iloc[-1]
-
-        positions = api.list_positions()
-        current_qty = sum(float(pos.qty) for pos in positions if pos.symbol == symbol)
-
-        if latest_rsi < 30 and current_qty == 0:
-            api.submit_order(symbol=symbol, qty=trade_qty[symbol], side='buy', type='market', time_in_force='gtc')
-            st.success(f"✅ Bought {trade_qty[symbol]} {symbol} @ {latest_close:.2f}, RSI: {latest_rsi:.2f}")
-        elif latest_rsi > 70 and current_qty > 0:
-            api.submit_order(symbol=symbol, qty=current_qty, side='sell', type='market', time_in_force='gtc')
-            st.info(f"🔴 Sold {current_qty} {symbol} @ {latest_close:.2f}, RSI: {latest_rsi:.2f}")
-        else:
-            st.write(f"No trade for {symbol} (RSI: {latest_rsi:.2f})")
-
-        time.sleep(1)  # Avoid hitting API limits
-
-    st.balloons()
+while True:
+    for symbol in TICKERS:
+        try:
+            bars = api.get_bars(symbol, TimeFrame.Minute, limit=20).df
+            if bars.empty or bars['volume'].iloc[-1] < 5000 or bars['close'].iloc[-1] < 5:  # Skip low volume or penny stocks
+                continue
+            bars['rsi'] = get_rsi(bars['close'])
+            latest_rsi = bars['rsi'].iloc[-1]
+            position_qty = 0
+            positions = api.list_positions()
+            for pos in positions:
+                if pos.symbol == symbol:
+                    position_qty = float(pos.qty)
+            # Aggressive logic for more trades
+            if latest_rsi < 45 and position_qty == 0:
+                api.submit_order(symbol=symbol, qty=1, side='buy', type='market', time_in_force='gtc')
+                trade_log.append((symbol, "BUY", bars['close'].iloc[-1], datetime.datetime.now()))
+                print(f"BUY {symbol} @ {bars['close'].iloc[-1]:.2f} | RSI: {latest_rsi:.2f}")
+            elif latest_rsi > 55 and position_qty > 0:
+                api.submit_order(symbol=symbol, qty=position_qty, side='sell', type='market', time_in_force='gtc')
+                sell_price = bars['close'].iloc[-1]
+                # Find buy price in trade log for P&L
+                for log in reversed(trade_log):
+                    if log[0] == symbol and log[1] == "BUY":
+                        buy_price = log[2]
+                        break
+                pnl = sell_price - buy_price
+                if pnl > 0:
+                    win += 1
+                else:
+                    loss += 1
+                trade_log.append((symbol, "SELL", sell_price, datetime.datetime.now(), pnl))
+                print(f"SELL {symbol} @ {sell_price:.2f} | RSI: {latest_rsi:.2f} | P&L: {pnl:.2f}")
+                print(f"Wins: {win}, Losses: {loss}, W/L Ratio: {(win/(win+loss)):.2f}")
+        except Exception as e:
+            print(f"Error on {symbol}: {e}")
+    print(f"Total Trades: {len(trade_log)}, Wins: {win}, Losses: {loss}, W/L Ratio: {(win/(win+loss)) if (win+loss)>0 else 0:.2f}")
+    time.sleep(60)  # Run every minute
 

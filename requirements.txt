@@ -1,0 +1,13 @@
+streamlit
+alpaca-trade-api
+torch==2.3.0
+transformers==4.40.0
+pandas
+numpy
+plotly
+gspread
+oauth2client
+python-dotenv
+scikit-learn
+matplotlib
+requests

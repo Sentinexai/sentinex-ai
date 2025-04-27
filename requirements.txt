@@ -1,8 +1,7 @@
 streamlit
 alpaca-trade-api
-torch==2.3.0+cpu
--f https://download.pytorch.org/whl/cpu
-transformers==4.40.0  # Add this line
+torch==2.3.0
+transformers==4.40.0
 pandas
 numpy
 plotly

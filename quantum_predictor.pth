@@ -1,4 +1,6 @@
 try:
     self.predictor.load_state_dict(torch.load('quantum_predictor.pth'))
 except FileNotFoundError:
-    print("Warning: quantum_predictor.pth not found. Using untrained model.")
+    print("Model file not found. Initializing new model.")
+    # Initialize model with random weights
+    torch.save(self.predictor.state_dict(), 'quantum_predictor.pth')

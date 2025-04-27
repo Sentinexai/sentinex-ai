@@ -1,5 +1,8 @@
 streamlit
+alpaca-py
 alpaca-trade-api
 pandas
 numpy
-requests
+plotly
+gspread
+oauth2client

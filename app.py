@@ -7,11 +7,13 @@ from alpaca_trade_api import REST
 import requests
 import time
 import os
+import streamlit as st
 from datetime import datetime
+from tenacity import retry, stop_after_attempt, wait_fixed
 
-# Configuration
-API_KEY = "PKHSYF5XH92B8VFNAJFD"
-API_SECRET = "89KOB1vOSn2c3HeGorQe6zkKa0F4tFgBjbIAisCf"
+# Configuration from Streamlit Secrets
+API_KEY = st.secrets["ALPACA_KEY"]
+API_SECRET = st.secrets["ALPACA_SECRET"]
 BASE_URL = "https://paper-api.alpaca.markets"
 
 class EnhancedSentimentAnalyzer:
@@ -32,33 +34,43 @@ class QuantumLSTM(nn.Module):
         self.fc = nn.Sequential(
             nn.Linear(hidden_size, 32),
             nn.ReLU(),
-            nn.Linear(32, 2)  # Output: [Long confidence, Short confidence]
+            nn.Linear(32, 3)  # [Long, Short, Hold]
         )
         
     def forward(self, x):
         out, _ = self.lstm(x)
         out, _ = self.attention(out, out, out)
-        return torch.sigmoid(self.fc(out[:, -1]))
+        return torch.softmax(self.fc(out[:, -1]), dim=1)
 
 class AdvancedRiskManager:
     def __init__(self, initial_balance=10000):
         self.balance = initial_balance
-        self.positions = {}  # Tracks {symbol: {'side': 'long/short', 'qty': N}}
+        self.positions = {}
         
-    def calculate_position_size(self, current_price, atr, direction):
-        risk_amount = self.balance * 0.02  # 2% risk per trade
+    def calculate_position_size(self, current_price, atr):
+        risk_amount = self.balance * 0.02
         size = risk_amount / (atr * 3)
-        max_shares = int(min(size, self.balance * 0.1) / current_price)
-        return max(max_shares, 1)
+        return min(int(size / current_price), int(self.balance * 0.1 / current_price))
 
 class SentinexAITrader:
     def __init__(self):
         self.api = REST(API_KEY, API_SECRET, BASE_URL)
         self.sentiment = EnhancedSentimentAnalyzer()
         self.predictor = QuantumLSTM()
-        self.predictor.load_state_dict(torch.load('quantum_predictor.pth'))
+        self._load_model()
         self.risk_manager = AdvancedRiskManager(float(self.api.get_account().equity))
         self.symbols = self._screen_stocks()
+        
+    def _load_model(self):
+        try:
+            self.predictor.load_state_dict(
+                torch.load('quantum_predictor.pth', map_location='cpu'),
+                strict=False
+            )
+            st.success("Model loaded successfully")
+        except Exception as e:
+            st.warning(f"Model load failed: {str(e)}. Initializing new model...")
+            torch.save(self.predictor.state_dict(), 'quantum_predictor.pth')
         
     def _screen_stocks(self):
         assets = self.api.list_assets(status='active')
@@ -72,11 +84,12 @@ class SentinexAITrader:
             bar = self.api.get_latest_bar(asset.symbol)
             return (asset.tradable and 
                     bar.close < 10 and 
-                    bar.volume > 1000000 and
+                    bar.volume > 1_000_000 and
                     self.api.get_asset(asset.symbol).shortable)
-        except:
+        except Exception:
             return False
     
+    @retry(stop=stop_after_attempt(3), wait=wait_fixed(2))
     def get_market_data(self, symbol):
         bars = self.api.get_bars(symbol, '15Min', limit=50).df
         bars['returns'] = bars['close'].pct_change()
@@ -84,52 +97,53 @@ class SentinexAITrader:
         return bars.dropna()
     
     def get_news_sentiment(self, symbol):
-        news = requests.get(f"https://newsapi.org/v2/everything?q={symbol}&apiKey={os.getenv('NEWS_API_KEY')}").json()
-        return [article['title'] for article in news.get('articles', [])[:3]]
+        try:
+            news = requests.get(
+                "https://newsapi.org/v2/everything",
+                params={
+                    "q": symbol,
+                    "apiKey": st.secrets["NEWS_API_KEY"],
+                    "pageSize": 3
+                },
+                timeout=5
+            ).json()
+            return [article['title'] for article in news.get('articles', [])]
+        except Exception as e:
+            st.error(f"News API error: {str(e)}")
+            return []
     
     def predict_movement(self, data):
         features = data[['open', 'high', 'low', 'close', 'volume', 'atr']].values
         tensor_data = torch.FloatTensor(features).unsqueeze(0)
-        long_conf, short_conf = self.predictor(tensor_data)[0].tolist()
-        return 'long' if long_conf > 0.7 else 'short' if short_conf > 0.7 else 'hold'
+        with torch.no_grad():
+            probs = self.predictor(tensor_data)[0].numpy()
+        return np.argmax(probs)  # 0=Long, 1=Short, 2=Hold
     
     def execute_trade(self, symbol, action, current_price, atr):
         try:
-            position = self.api.get_position(symbol) if self.api.get_position(symbol) else None
-            
-            # Close opposite positions first
+            position = self.api.get_position(symbol)
             if position:
-                if (position.side == 'long' and action == 'short') or (position.side == 'short' and action == 'long'):
+                if (position.side == 'long' and action == 1) or (position.side == 'short' and action == 0):
                     self.api.close_position(symbol)
-                    print(f"Closed {position.side} position in {symbol}")
+                    st.info(f"Closed {position.side} position in {symbol}")
 
-            # Calculate position size
-            size = self.risk_manager.calculate_position_size(current_price, atr, action)
-            
-            if action == 'long':
-                self.api.submit_order(
-                    symbol=symbol,
-                    qty=size,
-                    side='buy',
-                    type='limit',
-                    limit_price=current_price * 0.995,
-                    time_in_force='gtc'
-                )
-                print(f"Opened long: {size} shares of {symbol} at limit ${current_price * 0.995:.2f}")
-                
-            elif action == 'short':
-                self.api.submit_order(
-                    symbol=symbol,
-                    qty=size,
-                    side='sell',
-                    type='limit',
-                    limit_price=current_price * 1.005,
-                    time_in_force='gtc'
-                )
-                print(f"Opened short: {size} shares of {symbol} at limit ${current_price * 1.005:.2f}")
-                
+            if action in [0, 1]:  # Only trade if not Hold
+                size = self.risk_manager.calculate_position_size(current_price, atr)
+                if size > 0:
+                    order_type = 'limit'
+                    limit_price = current_price * 0.995 if action == 0 else current_price * 1.005
+                    
+                    self.api.submit_order(
+                        symbol=symbol,
+                        qty=size,
+                        side='buy' if action == 0 else 'sell',
+                        type=order_type,
+                        limit_price=limit_price,
+                        time_in_force='gtc'
+                    )
+                    st.success(f"Opened {'long' if action == 0 else 'short'} position in {symbol}")
         except Exception as e:
-            print(f"Trade execution error: {str(e)}")
+            st.error(f"Trade execution error: {str(e)}")
 
     def run(self):
         while True:
@@ -137,30 +151,31 @@ class SentinexAITrader:
             for symbol in self.symbols:
                 try:
                     data = self.get_market_data(symbol)
-                    if len(data) < 20: continue
-                    
+                    if len(data) < 20:
+                        continue
+                        
                     current_price = data['close'].iloc[-1]
                     atr = data['atr'].iloc[-1]
                     news = self.get_news_sentiment(symbol)
                     
                     # Generate predictions
-                    price_action = self.predict_movement(data)
-                    sentiment = np.mean([self.sentiment.analyze(h) for h in news])
+                    action = self.predict_movement(data)
+                    sentiment = np.mean([self.sentiment.analyze(h) for h in news]) if news else 0.5
                     
                     # Trading logic
-                    if price_action == 'long' and sentiment > 0.6:
-                        self.execute_trade(symbol, 'long', current_price, atr)
-                    elif price_action == 'short' and sentiment < 0.4:
-                        self.execute_trade(symbol, 'short', current_price, atr)
+                    if action == 0 and sentiment > 0.6:  # Long
+                        self.execute_trade(symbol, 0, current_price, atr)
+                    elif action == 1 and sentiment < 0.4:  # Short
+                        self.execute_trade(symbol, 1, current_price, atr)
                         
                 except Exception as e:
-                    print(f"Error processing {symbol}: {str(e)}")
+                    st.error(f"Error processing {symbol}: {str(e)}")
             
             time.sleep(300)
             self.risk_manager.balance = float(self.api.get_account().equity)
 
 if __name__ == "__main__":
+    st.title("Sentinex AI Trading Bot")
     bot = SentinexAITrader()
-    print("🚀 Starting Sentinex AI Quantum Trading Bot")
     bot.run()
 

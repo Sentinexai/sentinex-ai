@@ -1,5 +1,5 @@
 streamlit
-alpaca-trade-api  # Remove "alpaca-py" if not needed
+alpaca-trade-api  # Remove alpaca-py if not needed
 torch==2.3.0+cpu
 -f https://download.pytorch.org/whl/cpu
 pandas
@@ -11,4 +11,3 @@ python-dotenv
 scikit-learn
 matplotlib
 requests
-

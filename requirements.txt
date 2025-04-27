@@ -1,6 +1,6 @@
 streamlit
 alpaca-trade-api
-torch==2.3.0
+torch==2.3.0  # Remove "+cpu"
 transformers==4.40.0
 pandas
 numpy
@@ -11,3 +11,4 @@ python-dotenv
 scikit-learn
 matplotlib
 requests
+

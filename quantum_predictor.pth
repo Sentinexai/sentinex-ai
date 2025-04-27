@@ -1,6 +1,8 @@
 try:
-    self.predictor.load_state_dict(torch.load('quantum_predictor.pth'))
-except FileNotFoundError:
-    print("Model file not found. Initializing new model.")
-    # Initialize model with random weights
+    state_dict = torch.load('quantum_predictor.pth', map_location='cpu')
+    print("Model keys:", state_dict.keys())  # Debug output
+    self.predictor.load_state_dict(state_dict)
+except Exception as e:
+    print(f"Failed to load model: {str(e)}")
+    # Initialize fresh model if loading fails
     torch.save(self.predictor.state_dict(), 'quantum_predictor.pth')

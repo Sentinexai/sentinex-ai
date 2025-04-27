@@ -1,8 +1,9 @@
-class SentinexAITrader:
-    def __init__(self):
-        # ... other code ...
-        try:
-            self.predictor.load_state_dict(torch.load('quantum_predictor.pth'))
-        except FileNotFoundError:
-            print("Model file missing - initializing new model")
-            torch.save(self.predictor.state_dict(), 'quantum_predictor.pth')
+# Add error handling for model loading
+try:
+    self.predictor.load_state_dict(
+        torch.load('quantum_predictor.pth', map_location='cpu'),
+        strict=False  # Ignore mismatched keys
+    )
+except Exception as e:
+    print(f"Model load failed: {e}. Initializing new model...")
+    torch.save(self.predictor.state_dict(), 'quantum_predictor.pth')

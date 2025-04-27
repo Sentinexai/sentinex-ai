@@ -11,7 +11,7 @@ import streamlit as st
 from datetime import datetime
 from tenacity import retry, stop_after_attempt, wait_fixed
 
-# Configuration from Streamlit Secrets
+# Configuration using Streamlit Secrets
 API_KEY = st.secrets["ALPACA_KEY"]
 API_SECRET = st.secrets["ALPACA_SECRET"]
 BASE_URL = "https://paper-api.alpaca.markets"
@@ -49,19 +49,19 @@ class AdvancedRiskManager:
         
     def calculate_position_size(self, current_price, atr):
         risk_amount = self.balance * 0.02
-        size = risk_amount / (atr * 3)
-        return min(int(size / current_price), int(self.balance * 0.1 / current_price))
+        return min(int(risk_amount / (atr * 3)), int(self.balance * 0.1 / current_price))
 
 class SentinexAITrader:
     def __init__(self):
         self.api = REST(API_KEY, API_SECRET, BASE_URL)
         self.sentiment = EnhancedSentimentAnalyzer()
         self.predictor = QuantumLSTM()
-        self._load_model()
+        self._init_model()
         self.risk_manager = AdvancedRiskManager(float(self.api.get_account().equity))
         self.symbols = self._screen_stocks()
         
-    def _load_model(self):
+    def _init_model(self):
+        """Handles model loading with error recovery"""
         try:
             self.predictor.load_state_dict(
                 torch.load('quantum_predictor.pth', map_location='cpu'),
@@ -69,7 +69,7 @@ class SentinexAITrader:
             )
             st.success("Model loaded successfully")
         except Exception as e:
-            st.warning(f"Model load failed: {str(e)}. Initializing new model...")
+            st.warning(f"Model load failed: {e}. Initializing new model...")
             torch.save(self.predictor.state_dict(), 'quantum_predictor.pth')
         
     def _screen_stocks(self):
@@ -130,15 +130,12 @@ class SentinexAITrader:
             if action in [0, 1]:  # Only trade if not Hold
                 size = self.risk_manager.calculate_position_size(current_price, atr)
                 if size > 0:
-                    order_type = 'limit'
-                    limit_price = current_price * 0.995 if action == 0 else current_price * 1.005
-                    
                     self.api.submit_order(
                         symbol=symbol,
                         qty=size,
                         side='buy' if action == 0 else 'sell',
-                        type=order_type,
-                        limit_price=limit_price,
+                        type='limit',
+                        limit_price=current_price * 0.995 if action == 0 else current_price * 1.005,
                         time_in_force='gtc'
                     )
                     st.success(f"Opened {'long' if action == 0 else 'short'} position in {symbol}")
@@ -151,21 +148,18 @@ class SentinexAITrader:
             for symbol in self.symbols:
                 try:
                     data = self.get_market_data(symbol)
-                    if len(data) < 20:
-                        continue
-                        
+                    if len(data) < 20: continue
+                    
                     current_price = data['close'].iloc[-1]
                     atr = data['atr'].iloc[-1]
                     news = self.get_news_sentiment(symbol)
                     
-                    # Generate predictions
                     action = self.predict_movement(data)
                     sentiment = np.mean([self.sentiment.analyze(h) for h in news]) if news else 0.5
                     
-                    # Trading logic
-                    if action == 0 and sentiment > 0.6:  # Long
+                    if action == 0 and sentiment > 0.6:
                         self.execute_trade(symbol, 0, current_price, atr)
-                    elif action == 1 and sentiment < 0.4:  # Short
+                    elif action == 1 and sentiment < 0.4:
                         self.execute_trade(symbol, 1, current_price, atr)
                         
                 except Exception as e:
@@ -175,7 +169,6 @@ class SentinexAITrader:
             self.risk_manager.balance = float(self.api.get_account().equity)
 
 if __name__ == "__main__":
-    st.title("Sentinex AI Trading Bot")
+    st.title("🚀 Sentinex AI Quantum Trading System")
     bot = SentinexAITrader()
     bot.run()
-

@@ -1,5 +1,5 @@
 streamlit
-alpaca-trade-api
+alpaca-trade-api  # Remove alpaca-py if not needed
 pandas
 numpy
 plotly
@@ -9,3 +9,5 @@ python-dotenv
 scikit-learn
 matplotlib
 requests
+torch==2.3.0  # Specify exact CPU-compatible version
+-f https://download.pytorch.org/whl/cpu  # PyTorch wheel source

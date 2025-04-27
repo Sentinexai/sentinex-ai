@@ -1,8 +1,11 @@
 streamlit
-alpaca-py
 alpaca-trade-api
 pandas
 numpy
 plotly
 gspread
 oauth2client
+python-dotenv
+scikit-learn
+matplotlib
+requests

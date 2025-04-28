@@ -1,181 +1,245 @@
-import streamlit as st
 import pandas as pd
 import numpy as np
 import datetime
 from alpaca_trade_api.rest import REST, TimeFrame
 import time
 import pytz
+from scipy.stats import zscore
 from functools import wraps
 
-# API Configuration
+# ======================
+# CONFIGURATION
+# ======================
 API_KEY = "PKHSYF5XF92B8VFNAJFD"
 SECRET_KEY = "89KOB1vOSn2c3HeGorQe6zkKa0F4tFgBjbIAisCf"
 BASE_URL = "https://paper-api.alpaca.markets"
 
-api = REST(API_KEY, SECRET_KEY, BASE_URL)
-
 # Strategy Parameters
+INITIAL_CAPITAL = 5000
 RISK_PER_TRADE = 0.02
-MAX_PORTFOLIO_SIZE = 5000
 STOP_LOSS_PCT = 0.015
 TAKE_PROFIT_PCT = 0.03
-RSI_WINDOW = 14
-EMA_WINDOW = 50
-SYMBOL_LIMIT = 30  # Reduced from 50 to stay under rate limits
-REQUEST_DELAY = 0.3  # 300ms between symbols
+RSI_OVERBOUGHT = 65
+RSI_OVERSOLD = 35
 
-# Initialize variables
-trade_log = []
-performance_history = []
+# ======================
+# ALPACA INIT
+# ======================
+api = REST(API_KEY, SECRET_KEY, BASE_URL)
 
-def retry(max_retries=3, delay=1):
-    """Exponential backoff retry decorator"""
-    def decorator(func):
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            retries = 0
-            while retries < max_retries:
-                try:
-                    return func(*args, **kwargs)
-                except Exception as e:
-                    print(f"Retry {retries+1}/{max_retries}: {str(e)}")
-                    time.sleep(delay * (2 ** retries))
-                    retries += 1
-            return None
-        return wrapper
-    return decorator
-
-@retry(max_retries=3, delay=2)
-def get_bars_safe(symbol):
-    """Safe data fetching with rate limits"""
-    return api.get_bars(
-        symbol,
-        TimeFrame.Minute,
-        limit=50,
-        adjustments='split'  # Critical for free data access
-    ).df
-
-def get_sp500():
-    """Fetch S&P 500 symbols with caching"""
+# ======================
+# CORE FUNCTIONS
+# ======================
+def get_sp500_symbols():
     url = 'https://datahub.io/core/s-and-p-500-companies/r/constituents.csv'
     return pd.read_csv(url)['Symbol'].tolist()
 
-def filter_symbols():
-    """Filter symbols by liquidity"""
-    symbols = []
-    for symbol in get_sp500()[:SYMBOL_LIMIT]:  # Limit symbols
+@retry(max_retries=3, delay=2)
+def get_bars(symbol, timeframe=TimeFrame.Minute, limit=50):
+    return api.get_bars(symbol, timeframe, limit=limit, adjustments='split').df
+
+def calculate_volatility(bars):
+    return (bars['high'] - bars['low']).mean() / bars['close'].mean()
+
+def sort_symbols_by_opportunity(symbols):
+    """Priority sorting based on liquidity, volatility, and RSI"""
+    opportunities = []
+    
+    for symbol in symbols:
         try:
-            bars = get_bars_safe(symbol)
-            if not bars.empty and bars['volume'].mean() > 500_000:
-                symbols.append(symbol)
-        except:
+            bars = get_bars(symbol)
+            if len(bars) < 20: continue
+            
+            # Opportunity score components
+            volume_score = bars['volume'].iloc[-1] / bars['volume'].mean()
+            rsi = get_rsi(bars['close'])
+            rsi_score = (RSI_OVERSOLD - rsi.iloc[-1]) / (RSI_OVERSOLD - 30)  # Normalized
+            volatility_score = calculate_volatility(bars)
+            
+            # Composite score (higher = better)
+            score = (rsi_score * 0.4) + (volume_score * 0.3) + (volatility_score * 0.3)
+            opportunities.append( (symbol, score) )
+            
+        except Exception as e:
             continue
-        time.sleep(REQUEST_DELAY)
-    return symbols
+    
+    # Sort by best opportunities first
+    return [x[0] for x in sorted(opportunities, key=lambda x: x[1], reverse=True)][:30]
 
-TICKERS = filter_symbols()
+# ======================
+# ENHANCED SELLING SYSTEM
+# ======================
+def get_sell_signal(bars, entry_price):
+    """Multi-indicator sell decision matrix"""
+    # Technical indicators
+    rsi = get_rsi(bars['close'])
+    macd_line = bars['close'].ewm(span=12).mean() - bars['close'].ewm(span=26).mean()
+    macd_signal = macd_line.ewm(span=9).mean()
+    upper_band = bars['close'].rolling(20).mean() + 2*bars['close'].rolling(20).std()
+    
+    # Mean reversion
+    returns = bars['close'].pct_change(20)
+    z = zscore(returns.dropna())[-1]
+    
+    # Sell conditions
+    conditions = {
+        'rsi_overbought': rsi.iloc[-1] > RSI_OVERBOUGHT,
+        'bollinger_break': bars['close'].iloc[-1] > upper_band.iloc[-1],
+        'macd_crossover': macd_line.iloc[-1] < macd_signal.iloc[-1],
+        'zscore_high': z > 2.0,
+        'volume_spike': bars['volume'].iloc[-1] > 1.5*bars['volume'].rolling(20).mean().iloc[-1]
+    }
+    
+    # Weighted decision
+    score = sum([
+        conditions['rsi_overbought'] * 0.3,
+        conditions['bollinger_break'] * 0.25,
+        conditions['macd_crossover'] * 0.2,
+        conditions['zscore_high'] * 0.15,
+        conditions['volume_spike'] * 0.1
+    ])
+    
+    return score >= 0.6  # Trigger if weighted score > 60%
 
-def get_rsi(prices, window=14):
-    """Robust RSI calculation"""
-    delta = prices.diff().fillna(0)
-    gain = delta.where(delta > 0, 0)
-    loss = -delta.where(delta < 0, 0)
-    avg_gain = gain.rolling(window).mean()
-    avg_loss = loss.rolling(window).mean()
-    rs = avg_gain / avg_loss
-    return 100 - (100 / (1 + rs))
+def dynamic_position_sizing(available_cash, current_price, volatility):
+    """Volatility-adjusted position sizing"""
+    max_risk = available_cash * RISK_PER_TRADE
+    volatility_factor = 1 + (volatility * 2)  # Scale down in high volatility
+    return int(max_risk / (current_price * volatility_factor))
 
-def manage_risk():
-    """Dynamic risk adjustment"""
-    global RISK_PER_TRADE
-    if len(performance_history) > 10:
-        win_rate = sum(performance_history[-10:])/10
-        RISK_PER_TRADE = np.clip(
-            RISK_PER_TRADE * (1.1 if win_rate > 0.6 else 0.9),
-            0.01, 0.05
-        )
-
-def execute_trade(symbol, side, qty):
-    """Safe order execution"""
+# ======================
+# EXECUTION ENGINE
+# ======================
+def execute_sell(symbol, qty):
     try:
+        # First attempt market sell
         api.submit_order(
             symbol=symbol,
             qty=qty,
-            side=side,
+            side='sell',
             type='market',
-            time_in_force='gtc',
-            order_class='bracket',
-            stop_loss={'stop_price': round(qty * STOP_LOSS_PCT, 2)},
-            take_profit={'limit_price': round(qty * TAKE_PROFIT_PCT, 2)}
+            time_in_force='gtc'
         )
         return True
     except Exception as e:
-        print(f"Order failed for {symbol}: {str(e)}")
-        return False
+        print(f"Market sell failed: {e}. Trying limit sell...")
+        try:
+            last_price = get_bars(symbol, limit=1)['close'].iloc[-1]
+            api.submit_order(
+                symbol=symbol,
+                qty=qty,
+                side='sell',
+                type='limit',
+                limit_price=last_price * 0.995,
+                time_in_force='day'
+            )
+            return True
+        except Exception as e2:
+            print(f"Limit sell also failed: {e2}")
+            return False
 
+# ======================
+# MAIN TRADING LOOP
+# ======================
+def trading_cycle():
+    symbols = sort_symbols_by_opportunity(get_sp500_symbols())
+    positions = {pos.symbol: float(pos.qty) for pos in api.list_positions()}
+    account = api.get_account()
+    
+    # Buy Phase
+    for symbol in symbols:
+        if len(positions) >= 10:  # Max 10 positions
+            break
+            
+        bars = get_bars(symbol)
+        if len(bars) < 20: continue
+        
+        current_price = bars['close'].iloc[-1]
+        volatility = calculate_volatility(bars)
+        
+        if get_rsi(bars['close']).iloc[-1] < RSI_OVERSOLD:
+            qty = dynamic_position_sizing(float(account.cash), current_price, volatility)
+            if qty > 0:
+                api.submit_order(
+                    symbol=symbol,
+                    qty=qty,
+                    side='buy',
+                    type='market',
+                    time_in_force='gtc',
+                    order_class='bracket',
+                    stop_loss={'stop_price': current_price * (1 - STOP_LOSS_PCT)},
+                    take_profit={'limit_price': current_price * (1 + TAKE_PROFIT_PCT)}
+                )
+                print(f"Bought {qty} {symbol} @ {current_price}")
+    
+    # Sell Phase
+    for symbol, qty in positions.items():
+        bars = get_bars(symbol)
+        if len(bars) < 20: continue
+        
+        if get_sell_signal(bars, entry_price=get_average_entry(symbol)):
+            if execute_sell(symbol, qty):
+                print(f"Sold {qty} {symbol}")
+                # Optional: Sell covered call
+                try:
+                    sell_covered_call(symbol, qty)
+                except Exception as e:
+                    print(f"Covered call failed: {e}")
+
+# ======================
+# UTILITIES
+# ======================
+def get_average_entry(symbol):
+    positions = api.list_positions()
+    pos = next((p for p in positions if p.symbol == symbol), None)
+    return float(pos.avg_entry_price) if pos else None
+
+def sell_covered_call(symbol, qty):
+    """Options income strategy"""
+    chains = api.get_options_chain(symbol)
+    expiry = sorted(chains.expirations)[0]  # Nearest expiry
+    strike = get_bars(symbol, TimeFrame.Day, 1)['close'].iloc[-1] * 1.05  # 5% OTM
+    
+    api.submit_order(
+        symbol=f"{symbol}{expiry}C{strike}",
+        qty=qty,
+        side='sell',
+        type='limit',
+        limit_price=api.get_latest_trade(f"{symbol}{expiry}C{strike}").price,
+        time_in_force='day'
+    )
+
+# ======================
+# RISK MANAGEMENT
+# ======================
+def risk_management():
+    # Implement daily VaR calculation
+    portfolio = api.list_positions()
+    if not portfolio: return
+    
+    values = [float(pos.market_value) for pos in portfolio]
+    returns = np.random.normal(0, 0.02, 1000)  # Simulated returns
+    var_95 = np.percentile(returns, 5)
+    
+    if var_95 < -0.1:  # 10% loss threshold
+        print("Risk threshold breached! Liquidating 50%")
+        for pos in portfolio[:len(portfolio)//2]:
+            execute_sell(pos.symbol, pos.qty)
+
+# ======================
+# MAIN LOOP
+# ======================
 while True:
     try:
-        account = api.get_account()
-        positions = api.list_positions()
-        used_capital = sum(float(pos.market_value) for pos in positions)
-        available_cash = min(MAX_PORTFOLIO_SIZE - used_capital, float(account.cash))
-        
-        manage_risk()
-        
-        for symbol in TICKERS:
-            try:
-                bars = get_bars_safe(symbol)
-                if bars is None or len(bars) < 20:
-                    continue
-                
-                current_price = bars['close'].iloc[-1]
-                if current_price < 5 or bars['volume'].iloc[-1] < 10_000:
-                    continue
-                
-                # Calculate indicators
-                bars['rsi'] = get_rsi(bars['close'])
-                bars['ema50'] = bars['close'].ewm(span=EMA_WINDOW).mean()
-                latest_rsi = bars['rsi'].iloc[-1]
-                
-                # Position management
-                position = next((p for p in positions if p.symbol == symbol), None)
-                position_qty = float(position.qty) if position else 0
-                
-                # Entry logic
-                if not position_qty and available_cash > 100:
-                    if current_price > bars['ema50'].iloc[-1] and latest_rsi < 40:
-                        volatility = (bars['high'].iloc[-1] - bars['low'].iloc[-1])/current_price
-                        max_risk = available_cash * RISK_PER_TRADE
-                        qty = int(max_risk / (current_price * (1 + volatility)))
-                        
-                        if qty > 0 and execute_trade(symbol, 'buy', qty):
-                            trade_log.append({
-                                'symbol': symbol,
-                                'side': 'buy',
-                                'price': current_price,
-                                'time': datetime.datetime.now(pytz.UTC),
-                                'qty': qty
-                            })
-                            available_cash -= qty * current_price
-                
-                # Exit logic
-                elif position_qty > 0:
-                    if latest_rsi > 60 or current_price < bars['ema50'].iloc[-1]:
-                        if execute_trade(symbol, 'sell', position_qty):
-                            entry = next((t for t in reversed(trade_log) 
-                                       if t['symbol'] == symbol and t['side'] == 'buy'), None)
-                            if entry:
-                                pnl = (current_price - entry['price']) * position_qty
-                                performance_history.append(1 if pnl > 0 else 0)
+        if datetime.datetime.now().time() < datetime.time(9,30):
+            risk_management()
+            time.sleep(300)  # Wait for market open
+            continue
             
-            except Exception as e:
-                print(f"Symbol {symbol} error: {str(e)}")
-            finally:
-                time.sleep(REQUEST_DELAY)
-        
-        print(f"Cycle complete. Cash: ${available_cash:.2f}")
-        time.sleep(60)
+        trading_cycle()
+        time.sleep(60)  # Run every minute during market hours
         
     except Exception as e:
-        print(f"Main loop error: {str(e)}")
-        time.sleep(60)
+        print(f"Critical error: {e}")
+        time.sleep(300)
+

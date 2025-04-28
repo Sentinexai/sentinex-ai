@@ -29,43 +29,88 @@ def get_rsi(prices, window=14):
 trade_log = []
 win = 0
 loss = 0
+MAX_PORTFOLIO_SIZE = 5000  # $5,000 total portfolio size
+RISK_PER_TRADE = 0.05  # Risk 5% per trade
 
 while True:
-    for symbol in TICKERS:
-        try:
-            bars = api.get_bars(symbol, TimeFrame.Minute, limit=20).df
-            if bars.empty or bars['volume'].iloc[-1] < 5000 or bars['close'].iloc[-1] < 5:  # Skip low volume or penny stocks
-                continue
-            bars['rsi'] = get_rsi(bars['close'])
-            latest_rsi = bars['rsi'].iloc[-1]
-            position_qty = 0
-            positions = api.list_positions()
-            for pos in positions:
-                if pos.symbol == symbol:
-                    position_qty = float(pos.qty)
-            # Aggressive logic for more trades
-            if latest_rsi < 45 and position_qty == 0:
-                api.submit_order(symbol=symbol, qty=1, side='buy', type='market', time_in_force='gtc')
-                trade_log.append((symbol, "BUY", bars['close'].iloc[-1], datetime.datetime.now()))
-                print(f"BUY {symbol} @ {bars['close'].iloc[-1]:.2f} | RSI: {latest_rsi:.2f}")
-            elif latest_rsi > 55 and position_qty > 0:
-                api.submit_order(symbol=symbol, qty=position_qty, side='sell', type='market', time_in_force='gtc')
-                sell_price = bars['close'].iloc[-1]
-                # Find buy price in trade log for P&L
-                for log in reversed(trade_log):
-                    if log[0] == symbol and log[1] == "BUY":
-                        buy_price = log[2]
+    try:
+        # Get current account balance and positions
+        account = api.get_account()
+        cash = float(account.cash)
+        positions = api.list_positions()
+        
+        # Calculate available buying power
+        used_capital = sum(float(pos.market_value) for pos in positions)
+        available_cash = min(MAX_PORTFOLIO_SIZE - used_capital, cash)
+        
+        for symbol in TICKERS:
+            try:
+                bars = api.get_bars(symbol, TimeFrame.Minute, limit=20).df
+                if bars.empty or bars['volume'].iloc[-1] < 5000 or bars['close'].iloc[-1] < 5:
+                    continue
+                
+                current_price = bars['close'].iloc[-1]
+                bars['rsi'] = get_rsi(bars['close'])
+                latest_rsi = bars['rsi'].iloc[-1]
+                
+                # Check existing position
+                position_qty = 0
+                for pos in positions:
+                    if pos.symbol == symbol:
+                        position_qty = float(pos.qty)
                         break
-                pnl = sell_price - buy_price
-                if pnl > 0:
-                    win += 1
-                else:
-                    loss += 1
-                trade_log.append((symbol, "SELL", sell_price, datetime.datetime.now(), pnl))
-                print(f"SELL {symbol} @ {sell_price:.2f} | RSI: {latest_rsi:.2f} | P&L: {pnl:.2f}")
-                print(f"Wins: {win}, Losses: {loss}, W/L Ratio: {(win/(win+loss)):.2f}")
-        except Exception as e:
-            print(f"Error on {symbol}: {e}")
-    print(f"Total Trades: {len(trade_log)}, Wins: {win}, Losses: {loss}, W/L Ratio: {(win/(win+loss)) if (win+loss)>0 else 0:.2f}")
-    time.sleep(60)  # Run every minute
+                
+                # Dynamic position sizing
+                if latest_rsi < 45 and position_qty == 0 and available_cash > 0:
+                    max_risk_amount = available_cash * RISK_PER_TRADE
+                    qty = int(max_risk_amount // current_price)
+                    
+                    if qty > 0:
+                        api.submit_order(
+                            symbol=symbol,
+                            qty=qty,
+                            side='buy',
+                            type='market',
+                            time_in_force='gtc'
+                        )
+                        trade_log.append((symbol, "BUY", current_price, datetime.datetime.now(), qty))
+                        print(f"BUY {qty} {symbol} @ {current_price:.2f} | RSI: {latest_rsi:.2f}")
+                        available_cash -= qty * current_price
+                
+                elif latest_rsi > 55 and position_qty > 0:
+                    api.submit_order(
+                        symbol=symbol,
+                        qty=position_qty,
+                        side='sell',
+                        type='market',
+                        time_in_force='gtc'
+                    )
+                    sell_price = bars['close'].iloc[-1]
+                    
+                    # Calculate P&L
+                    for log in reversed(trade_log):
+                        if log[0] == symbol and log[1] == "BUY":
+                            buy_price = log[2]
+                            shares_bought = log[4]
+                            break
+                    
+                    pnl = (sell_price - buy_price) * shares_bought
+                    if pnl > 0:
+                        win += 1
+                    else:
+                        loss += 1
+                    
+                    trade_log.append((symbol, "SELL", sell_price, datetime.datetime.now(), pnl))
+                    print(f"SELL {position_qty} {symbol} @ {sell_price:.2f} | P&L: {pnl:.2f}")
+                    print(f"Wins: {win}, Losses: {loss}, W/L Ratio: {(win/(win+loss)):.2f}")
+            
+            except Exception as e:
+                print(f"Error on {symbol}: {e}")
+        
+        print(f"Total Trades: {len(trade_log)}, Wins: {win}, Losses: {loss}, W/L Ratio: {(win/(win+loss)) if (win+loss)>0 else 0:.2f}")
+        time.sleep(60)
+    
+    except Exception as e:
+        print(f"Main loop error: {e}")
+        time.sleep(60)
 

@@ -6,3 +6,8 @@ numpy
 plotly
 gspread
 oauth2client
+torch
+transformers
+requests
+scikit-learn
+python-dotenv

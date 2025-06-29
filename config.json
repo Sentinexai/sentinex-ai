@@ -7,6 +7,9 @@
   "news": {
     "api_key": "your_news_api_key"
   },
+  "account": {
+    "pdt_threshold": 25000
+  },
   "settings": {
     "symbols": ["AAPL", "TSLA"],
     "strategy": "news_sentiment"

@@ -1,9 +1,8 @@
 {
-  "account": {"initial_capital": 3000, "pdt_threshold": 25000},
-  "risk": {"risk_per_trade": 0.01, "trailing_stop": 0.5, "max_positions": 6},
-  "stock_selection": {"max_price": 20, "preferred_price_range": [1, 10], "min_volume": 500000},
-  "exit_strategy": {"prefer_next_day": true, "minimum_profit_to_hold": 0.05, "max_hold_days": 5},
-  "news": {"enabled": true, "api_key": "YOUR_NEWSAPI_KEY"},
-  "sentiment": {"enabled": true},
-  "ml_model": {"enabled": true, "path": "quantum_predictor.pth"}
+  "alpaca": {
+    "api_key": "YOUR_ALPACA_API_KEY",
+    "secret_key": "YOUR_ALPACA_SECRET_KEY",
+    "base_url": "https://paper-api.alpaca.markets"  // or live URL
+  },
+  ...
 }

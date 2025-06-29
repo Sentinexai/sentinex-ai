@@ -1,11 +1,14 @@
 {
   "alpaca": {
-    "api_key": "your_api_key",
-    "secret_key": "your_secret_key",
+    "api_key": "your_alpaca_api_key",
+    "secret_key": "your_alpaca_secret_key",
     "base_url": "https://paper-api.alpaca.markets"
   },
+  "news": {
+    "api_key": "your_news_api_key"
+  },
   "settings": {
-    "symbols": ["AAPL", "MSFT"],
+    "symbols": ["AAPL", "TSLA"],
     "strategy": "news_sentiment"
   }
 }

@@ -10,6 +10,9 @@
   "account": {
     "pdt_threshold": 25000
   },
+  "sentiment": {
+    "enabled": true
+  },
   "settings": {
     "symbols": ["AAPL", "TSLA"],
     "strategy": "news_sentiment"

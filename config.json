@@ -1,8 +1,11 @@
 {
   "alpaca": {
-    "api_key": "YOUR_ALPACA_API_KEY",
-    "secret_key": "YOUR_ALPACA_SECRET_KEY",
-    "base_url": "https://paper-api.alpaca.markets"  // or live URL
+    "api_key": "your_api_key",
+    "secret_key": "your_secret_key",
+    "base_url": "https://paper-api.alpaca.markets"
   },
-  ...
+  "settings": {
+    "symbols": ["AAPL", "MSFT"],
+    "strategy": "news_sentiment"
+  }
 }
